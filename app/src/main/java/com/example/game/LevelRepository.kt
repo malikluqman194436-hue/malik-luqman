@@ -27,7 +27,7 @@ object LevelRepository {
       }
     }
 
-    // 2. Built-in fallbacks for Levels 1..6 (matching level_1..6.json)
+    // 2. Built-in fallback for Level 1 (matching level_1.json)
     buildBuiltInJsonFallback(safeLevel)?.let { return it }
 
     // 3. Procedural reverse-simulation generator verified with DFS solver
@@ -43,115 +43,22 @@ object LevelRepository {
           rows = 4,
           vehicles =
             listOf(
-              VehicleSpec(0.88f, 0.50f, VehicleColor.PURPLE, Direction.LEFT, 16),
-              VehicleSpec(2.12f, 0.50f, VehicleColor.PURPLE, Direction.LEFT, 16),
-              VehicleSpec(0.50f, 1.48f, VehicleColor.WHITE, Direction.UP, 16),
-              VehicleSpec(1.50f, 1.48f, VehicleColor.GREEN, Direction.UP, 16),
-              VehicleSpec(2.50f, 1.48f, VehicleColor.CYAN, Direction.UP, 16),
-              VehicleSpec(0.94f, 2.46f, VehicleColor.GREEN, Direction.RIGHT, 16),
-              VehicleSpec(2.18f, 2.46f, VehicleColor.GREEN, Direction.RIGHT, 16),
-              VehicleSpec(0.50f, 3.44f, VehicleColor.CYAN, Direction.UP, 16),
-              VehicleSpec(1.50f, 3.44f, VehicleColor.PURPLE, Direction.UP, 16),
-              VehicleSpec(2.50f, 3.44f, VehicleColor.WHITE, Direction.UP, 16),
+              VehicleSpec(0.50f, 0.50f, VehicleColor.BLUE, Direction.UP, 24),
+              VehicleSpec(1.50f, 0.50f, VehicleColor.RED, Direction.UP, 40),
+              VehicleSpec(2.50f, 0.50f, VehicleColor.YELLOW, Direction.RIGHT, 24),
+              VehicleSpec(0.50f, 1.50f, VehicleColor.RED, Direction.LEFT, 20),
+              VehicleSpec(1.50f, 1.50f, VehicleColor.YELLOW, Direction.UP, 16),
+              VehicleSpec(2.50f, 1.50f, VehicleColor.BLUE, Direction.UP, 36),
+              VehicleSpec(0.50f, 2.50f, VehicleColor.YELLOW, Direction.UP, 28),
+              VehicleSpec(1.50f, 2.50f, VehicleColor.BLUE, Direction.UP, 32),
+              VehicleSpec(2.50f, 2.50f, VehicleColor.RED, Direction.UP, 16),
+              VehicleSpec(0.50f, 3.50f, VehicleColor.YELLOW, Direction.UP, 24),
+              VehicleSpec(1.50f, 3.50f, VehicleColor.RED, Direction.DOWN, 40),
+              VehicleSpec(2.50f, 3.50f, VehicleColor.BLUE, Direction.LEFT, 16),
             ),
           conveyorSpeed = 40f,
           isTutorial = true,
-          tutorialHint = "Tap any clear car to send it to a tilted waiting stand!",
-        )
-
-      2 ->
-        assembleFromSpecs(
-          level = 2,
-          cols = 3,
-          rows = 2,
-          vehicles =
-            listOf(
-              VehicleSpec(0.5f, 0.5f, VehicleColor.RED, Direction.LEFT, 8),
-              VehicleSpec(1.5f, 0.5f, VehicleColor.GREEN, Direction.LEFT, 12),
-              VehicleSpec(2.5f, 0.5f, VehicleColor.BLUE, Direction.RIGHT, 8),
-              VehicleSpec(0.5f, 1.5f, VehicleColor.GREEN, Direction.UP, 12),
-              VehicleSpec(1.5f, 1.5f, VehicleColor.RED, Direction.DOWN, 8),
-              VehicleSpec(2.5f, 1.5f, VehicleColor.BLUE, Direction.UP, 8),
-            ),
-          conveyorSpeed = 42.5f,
-        )
-
-      3 ->
-        assembleFromSpecs(
-          level = 3,
-          cols = 3,
-          rows = 3,
-          vehicles =
-            listOf(
-              VehicleSpec(0.5f, 0.5f, VehicleColor.YELLOW, Direction.LEFT, 12),
-              VehicleSpec(2.5f, 0.5f, VehicleColor.RED, Direction.RIGHT, 12),
-              VehicleSpec(0.5f, 1.5f, VehicleColor.BLUE, Direction.UP, 12),
-              VehicleSpec(1.5f, 1.5f, VehicleColor.GREEN, Direction.UP, 12),
-              VehicleSpec(2.5f, 1.5f, VehicleColor.YELLOW, Direction.UP, 12),
-              VehicleSpec(0.5f, 2.5f, VehicleColor.GREEN, Direction.LEFT, 12),
-              VehicleSpec(2.5f, 2.5f, VehicleColor.BLUE, Direction.RIGHT, 12),
-            ),
-          conveyorSpeed = 45f,
-        )
-
-      4 ->
-        assembleFromSpecs(
-          level = 4,
-          cols = 3,
-          rows = 3,
-          vehicles =
-            listOf(
-              VehicleSpec(0.5f, 0.5f, VehicleColor.RED, Direction.LEFT, 12),
-              VehicleSpec(2.5f, 0.5f, VehicleColor.BLUE, Direction.RIGHT, 12),
-              VehicleSpec(0.5f, 1.5f, VehicleColor.GREEN, Direction.UP, 12),
-              VehicleSpec(1.5f, 1.5f, VehicleColor.YELLOW, Direction.UP, 12),
-              VehicleSpec(2.5f, 1.5f, VehicleColor.RED, Direction.UP, 12),
-              VehicleSpec(0.5f, 2.5f, VehicleColor.BLUE, Direction.LEFT, 12),
-              VehicleSpec(1.5f, 2.5f, VehicleColor.GREEN, Direction.RIGHT, 12),
-              VehicleSpec(2.5f, 2.5f, VehicleColor.YELLOW, Direction.RIGHT, 12),
-            ),
-          conveyorSpeed = 47.5f,
-        )
-
-      5 ->
-        assembleFromSpecs(
-          level = 5,
-          cols = 3,
-          rows = 3,
-          vehicles =
-            listOf(
-              VehicleSpec(0.5f, 0.5f, VehicleColor.PURPLE, Direction.LEFT, 12),
-              VehicleSpec(1.5f, 0.5f, VehicleColor.GREEN, Direction.LEFT, 12),
-              VehicleSpec(2.5f, 0.5f, VehicleColor.BLUE, Direction.RIGHT, 12),
-              VehicleSpec(0.5f, 1.5f, VehicleColor.RED, Direction.UP, 16),
-              VehicleSpec(1.5f, 1.5f, VehicleColor.YELLOW, Direction.UP, 12),
-              VehicleSpec(2.5f, 1.5f, VehicleColor.PURPLE, Direction.UP, 12),
-              VehicleSpec(0.5f, 2.5f, VehicleColor.GREEN, Direction.LEFT, 16),
-              VehicleSpec(1.5f, 2.5f, VehicleColor.YELLOW, Direction.DOWN, 12),
-              VehicleSpec(2.5f, 2.5f, VehicleColor.RED, Direction.RIGHT, 16),
-            ),
-          conveyorSpeed = 50f,
-        )
-
-      6 ->
-        assembleFromSpecs(
-          level = 6,
-          cols = 3,
-          rows = 4,
-          vehicles =
-            listOf(
-              VehicleSpec(0.5f, 0.5f, VehicleColor.PURPLE, Direction.LEFT, 12),
-              VehicleSpec(2.5f, 0.5f, VehicleColor.PURPLE, Direction.LEFT, 12),
-              VehicleSpec(0.5f, 1.5f, VehicleColor.YELLOW, Direction.UP, 16),
-              VehicleSpec(1.5f, 1.5f, VehicleColor.GREEN, Direction.UP, 12),
-              VehicleSpec(2.5f, 1.5f, VehicleColor.BLUE, Direction.UP, 12),
-              VehicleSpec(0.5f, 2.5f, VehicleColor.GREEN, Direction.RIGHT, 16),
-              VehicleSpec(2.5f, 2.5f, VehicleColor.GREEN, Direction.RIGHT, 12),
-              VehicleSpec(0.5f, 3.5f, VehicleColor.BLUE, Direction.UP, 12),
-              VehicleSpec(1.5f, 3.5f, VehicleColor.PURPLE, Direction.UP, 16),
-              VehicleSpec(2.5f, 3.5f, VehicleColor.RED, Direction.UP, 12),
-            ),
-          conveyorSpeed = 52.5f,
+          tutorialHint = "Tap any clear car to send it to a waiting stand!",
         )
 
       else -> null
@@ -160,15 +67,26 @@ object LevelRepository {
 
   private fun paletteForLevel(level: Int): List<VehicleColor> {
     return when {
-      level == 1 -> listOf(VehicleColor.PURPLE, VehicleColor.WHITE, VehicleColor.GREEN, VehicleColor.CYAN)
-      level <= 4 -> listOf(VehicleColor.PURPLE, VehicleColor.WHITE, VehicleColor.GREEN, VehicleColor.CYAN)
-      level <= 8 ->
+      level == 1 -> listOf(VehicleColor.RED, VehicleColor.BLUE, VehicleColor.YELLOW)
+      level == 2 -> listOf(VehicleColor.RED, VehicleColor.BLUE, VehicleColor.YELLOW, VehicleColor.GREEN, VehicleColor.PURPLE)
+      level <= 4 ->
         listOf(
-          VehicleColor.PURPLE,
-          VehicleColor.WHITE,
-          VehicleColor.GREEN,
-          VehicleColor.CYAN,
           VehicleColor.RED,
+          VehicleColor.BLUE,
+          VehicleColor.YELLOW,
+          VehicleColor.GREEN,
+          VehicleColor.PURPLE,
+          VehicleColor.ORANGE,
+        )
+      level <= 6 ->
+        listOf(
+          VehicleColor.RED,
+          VehicleColor.BLUE,
+          VehicleColor.YELLOW,
+          VehicleColor.GREEN,
+          VehicleColor.PURPLE,
+          VehicleColor.ORANGE,
+          VehicleColor.CYAN,
         )
       else -> VehicleColor.busColors
     }
@@ -176,12 +94,9 @@ object LevelRepository {
 
   private fun capacitiesForLevel(level: Int): List<Int> {
     return when {
-      level == 1 -> listOf(16)
-      level == 2 -> listOf(12, 16)
-      level <= 4 -> listOf(16, 20)
-      level <= 7 -> listOf(16, 24, 32)
-      level <= 9 -> listOf(20, 24, 32, 40)
-      else -> listOf(24, 32, 40)
+      level <= 2 -> listOf(16, 20, 24, 32, 36, 40)
+      level <= 5 -> listOf(20, 24, 28, 32, 36, 40)
+      else -> listOf(24, 28, 32, 36, 40)
     }
   }
 
@@ -192,7 +107,12 @@ object LevelRepository {
    * - Verifies solvability with CollisionEngine.canClearAll() DFS solver before returning.
    */
   private fun generateReverseSimulatedLevel(levelNumber: Int): LevelDefinition {
-    val targetBuses = (4 + levelNumber).coerceAtMost(24)
+    val targetBuses =
+      when {
+        levelNumber == 1 -> 12
+        levelNumber <= 6 -> (12 + levelNumber * 2).coerceAtMost(24)
+        else -> 24
+      }
     val cols = if (targetBuses <= 12) 3 else 4
     val rows = ((targetBuses + cols - 1) / cols).coerceAtLeast(3)
 

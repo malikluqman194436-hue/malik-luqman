@@ -110,7 +110,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     comboResetTimer = 0f
     loseGraceTimer = 0f
     statusBannerTimer = 0f
-    introRingFillComplete = true
+    introRingFillComplete = false
 
     val vehicles =
       levelDef.vehicles.mapIndexed { idx, spec ->
@@ -191,31 +191,35 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     val rows = sequence.chunked(4)
 
     val result = ArrayList<ConveyorPassenger>(sequence.size)
-    val ringCapacityRows = (geom.ringLenDp / rowStep).toInt().coerceAtLeast(8)
-    val initialRingRows = minOf(rows.size, ringCapacityRows)
+    val leftStartDist = geom.leftArmLenDp * 0.10f
+    val rightStartDist = geom.rightArmLenDp * 0.10f
 
     var leftArmRowRank = 0
     var rightArmRowRank = 0
     var qIdx = 0
+    var useRightArm = false
+    var prevLeadColor: VehicleColor? = null
+    var blockRowRun = 0
 
     for (rowIdx in rows.indices) {
       val rowColors = rows[rowIdx]
+      val leadColor = rowColors.firstOrNull()
+      if (rowIdx > 0 && (leadColor != prevLeadColor || blockRowRun >= 6)) {
+        useRightArm = !useRightArm
+        blockRowRun = 0
+      }
+      prevLeadColor = leadColor
+      blockRowRun++
+
       val (segment, distDp, branch) =
-        if (rowIdx < initialRingRows) {
-          // Pre-fill the 360° oval ring seamlessly from the front of the boarding zone backward
-          val d = geom.wrapRing(geom.boardingEndDp - rowIdx * rowStep)
-          Triple(ConveyorSegment.RING, d, rowIdx % 2)
+        if (!useRightArm) {
+          val d = leftStartDist - leftArmRowRank * rowStep
+          leftArmRowRank++
+          Triple(ConveyorSegment.LEFT_ARM, d, 0)
         } else {
-          val armRowIdx = rowIdx - initialRingRows
-          if ((armRowIdx / 4) % 2 == 0) {
-            val d = geom.leftArmLenDp - (leftArmRowRank + 1) * rowStep
-            leftArmRowRank++
-            Triple(ConveyorSegment.LEFT_ARM, d, 0)
-          } else {
-            val d = geom.rightArmLenDp - (rightArmRowRank + 1) * rowStep
-            rightArmRowRank++
-            Triple(ConveyorSegment.RIGHT_ARM, d, 1)
-          }
+          val d = rightStartDist - rightArmRowRank * rowStep
+          rightArmRowRank++
+          Triple(ConveyorSegment.RIGHT_ARM, d, 1)
         }
 
       for (col in rowColors.indices) {
@@ -480,7 +484,11 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // 3b. Advance LEFT_ARM and RIGHT_ARM rows synchronously into open space on RING
-    fun advanceArm(seg: ConveyorSegment, armLen: Float, entryRingDist: Float) {
+    val leftArmRowCount = passengers.asSequence().filter { it.segment == ConveyorSegment.LEFT_ARM }.map { it.rowGroupId }.distinct().count()
+    val rightArmRowCount = passengers.asSequence().filter { it.segment == ConveyorSegment.RIGHT_ARM }.map { it.rowGroupId }.distinct().count()
+    val holdLeftForBalance = introRingFillComplete && rightArmRowCount > leftArmRowCount + 5 && rightArmRowCount > 0
+
+    fun advanceArm(seg: ConveyorSegment, armLen: Float, entryRingDist: Float, allowRingEntry: Boolean) {
       val armByRow = LinkedHashMap<Int, MutableList<Int>>()
       for (idx in passengers.indices) {
         if (passengers[idx].segment == seg) {
@@ -503,13 +511,14 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         var candidate = curDist + moveStep * armMultiplier
         if (rank == 0 && candidate >= armLen) {
           val ringClear =
-            passengers.none { other ->
-              other.segment == ConveyorSegment.RING &&
-                minOf(
-                  geom.forwardRingDistance(other.distDp, entryRingDist),
-                  geom.forwardRingDistance(entryRingDist, other.distDp),
-                ) < rowStep * 0.98f
-            }
+            allowRingEntry &&
+              passengers.none { other ->
+                other.segment == ConveyorSegment.RING &&
+                  minOf(
+                    geom.forwardRingDistance(other.distDp, entryRingDist),
+                    geom.forwardRingDistance(entryRingDist, other.distDp),
+                  ) < rowStep * 0.98f
+              }
           if (ringClear) {
             val ringStart = geom.wrapRing(entryRingDist + (candidate - armLen))
             for (idx in rowIndices) {
@@ -528,8 +537,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         blockerDistOnArm = clamped
       }
     }
-    advanceArm(ConveyorSegment.LEFT_ARM, geom.leftArmLenDp, geom.leftEntryRingDistDp)
-    advanceArm(ConveyorSegment.RIGHT_ARM, geom.rightArmLenDp, geom.rightEntryRingDistDp)
+    advanceArm(ConveyorSegment.LEFT_ARM, geom.leftArmLenDp, geom.leftEntryRingDistDp, allowRingEntry = !holdLeftForBalance)
+    advanceArm(ConveyorSegment.RIGHT_ARM, geom.rightArmLenDp, geom.rightEntryRingDistDp, allowRingEntry = true)
 
     // 4. Boarding check: peel front-most matching rows cleanly left-to-right (col 0 -> 1 -> 2 -> 3)
     val boardingCandidates =
@@ -614,7 +623,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
               Particle(
                 id = nextEntityId++,
                 x = slotXNorm + (Random.nextFloat() - 0.5f) * 0.025f,
-                y = 0.365f,
+                y = 0.344f,
                 vx = (Random.nextFloat() - 0.5f) * 0.14f,
                 vy = -0.08f - Random.nextFloat() * 0.10f,
                 color = Color.White,
@@ -642,15 +651,15 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
               FloatingText(
                 id = nextEntityId++,
                 x = slotXNorm,
-                y = 0.325f,
+                y = 0.305f,
                 text = "FULL!",
                 color = GoldCoin,
                 life = 0.9f,
                 maxLife = 0.9f,
               )
             )
-            spawnSmokeCloud(particles, slotXNorm, 0.382f, count = 10)
-            spawnConfettiBurst(particles, slotXNorm, 0.372f, count = 18)
+            spawnSmokeCloud(particles, slotXNorm, 0.360f, count = 10)
+            spawnConfettiBurst(particles, slotXNorm, 0.352f, count = 18)
           } else {
             vehicles[vIdx] = bus.copy(boardedCount = newBoarded, bounceTimer = 0.18f)
           }
@@ -1316,8 +1325,10 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     _uiState.update { it.copy(shopNotice = "+$amount coins added!") }
   }
 
-  private fun slotNormalizedX(slotIndex: Int, totalSlots: Int): Float {
-    return (0.142f + slotIndex * 0.0982f).coerceIn(0.08f, 0.92f)
+  private fun slotNormalizedX(slotIndex: Int, @Suppress("UNUSED_PARAMETER") totalSlots: Int): Float {
+    val centers = floatArrayOf(0.1307f, 0.2395f, 0.3423f, 0.4397f, 0.5368f, 0.6391f, 0.7454f, 0.8517f)
+    return if (slotIndex in centers.indices) centers[slotIndex]
+    else (0.1307f + slotIndex * 0.102f).coerceIn(0.08f, 0.92f)
   }
 
   private fun spawnSmokeCloud(

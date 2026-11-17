@@ -29,9 +29,9 @@ class LevelValidationTest {
   @Test
   fun levelProgressionBusCountsColorsAndNoBlockedInLevel1() {
     val l1 = LevelRepository.getLevel(1)
-    assertEquals("Level 1 must have 10 buses", 10, l1.vehicles.size)
-    assertEquals("Level 1 must have 4 colors", 4, l1.vehicles.map { it.color }.distinct().size)
-    assertTrue("Level 1 capacity must be 16", l1.vehicles.all { it.capacity == 16 })
+    assertEquals("Level 1 must have 12 buses", 12, l1.vehicles.size)
+    assertEquals("Level 1 must have 3 colors", 3, l1.vehicles.map { it.color }.distinct().size)
+    assertTrue("Level 1 must include 40-passenger buses", l1.vehicles.any { it.capacity == 40 })
     val l1Entities =
       l1.vehicles.mapIndexed { idx, spec ->
         VehicleEntity(idx + 1, spec.color, spec.direction, spec.capacity, spec.x, spec.y)
@@ -40,13 +40,13 @@ class LevelValidationTest {
       l1Entities.count { v ->
         CollisionEngine.checkPath(v, l1Entities, l1.gridCols, l1.gridRows).isClear
       }
-    assertTrue("Level 1 must have clear starter buses", clearStarterCount >= 2)
+    assertTrue("Level 1 must have clear starter buses", clearStarterCount >= 3)
 
-    assertEquals(6, LevelRepository.getLevel(2).vehicles.size)
-    assertEquals(7, LevelRepository.getLevel(3).vehicles.size)
-    assertEquals(8, LevelRepository.getLevel(4).vehicles.size)
-    assertEquals(9, LevelRepository.getLevel(5).vehicles.size)
-    assertEquals(10, LevelRepository.getLevel(6).vehicles.size)
+    assertEquals(16, LevelRepository.getLevel(2).vehicles.size)
+    assertEquals(18, LevelRepository.getLevel(3).vehicles.size)
+    assertEquals(20, LevelRepository.getLevel(4).vehicles.size)
+    assertEquals(22, LevelRepository.getLevel(5).vehicles.size)
+    assertEquals(24, LevelRepository.getLevel(6).vehicles.size)
     assertEquals(24, LevelRepository.getLevel(20).vehicles.size)
     assertEquals(24, LevelRepository.getLevel(25).vehicles.size)
   }

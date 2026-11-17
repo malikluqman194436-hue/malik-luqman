@@ -34,12 +34,12 @@ class LaneGeometry(
   val widthDp: Float,
   val heightDp: Float,
 ) {
-  // Narrowest road section (top & bottom arches) is ~20.0dp half-width on 411x915
-  val safeHalfRoadWidthDp: Float = minOf(widthDp * 0.052f, heightDp * 0.0218f).coerceAtLeast(17.5f)
-  private val outerRimMarginDp: Float = (1.6f / 360f) * widthDp
-  val passengerWidthDp: Float = safeHalfRoadWidthDp * 0.59f
-  val colStepDp: Float = safeHalfRoadWidthDp * 0.42f
-  val rowSpacingDp: Float = (passengerWidthDp * 1.15f).coerceAtLeast(10.5f)
+  // Narrowest road section (top arch ~73px on 1898px height -> ~18dp half-width on 411x915)
+  val safeHalfRoadWidthDp: Float = minOf(widthDp * 0.049f, heightDp * 0.0195f).coerceAtLeast(16.5f)
+  private val outerRimMarginDp: Float = (1.4f / 360f) * widthDp
+  val passengerWidthDp: Float = safeHalfRoadWidthDp * 0.54f
+  val colStepDp: Float = safeHalfRoadWidthDp * 0.41f
+  val rowSpacingDp: Float = (passengerWidthDp * 0.78f).coerceAtLeast(8.2f)
 
   private val ringPoints: List<ArcPoint>
   private val leftArmPoints: List<ArcPoint>
@@ -54,20 +54,20 @@ class LaneGeometry(
   val boardingEndDp: Float
 
   init {
-    // Control points measured directly from game_play_bg.png asphalt centerlines every 30 deg
+    // Control points measured directly from the new glossy racetrack game_play_bg.png asphalt centerlines every 30 deg
     val ringControl = listOf(
-      pt(0.2376f, 0.2180f), // 0: left junction (9 o'clock)
-      pt(0.2896f, 0.2718f), // 1: bottom-left curve
-      pt(0.4013f, 0.2943f), // 2: boarding start
-      pt(0.5020f, 0.2994f), // 3: bottom-center boarding spot
-      pt(0.6044f, 0.2956f), // 4: boarding end
-      pt(0.7168f, 0.2721f), // 5: bottom-right curve
-      pt(0.7694f, 0.2180f), // 6: right junction (3 o'clock)
-      pt(0.7060f, 0.1665f), // 7: top-right curve
-      pt(0.6024f, 0.1419f), // 8: top-right arch
-      pt(0.5020f, 0.1357f), // 9: top-center
-      pt(0.4011f, 0.1415f), // 10: top-left arch
-      pt(0.2958f, 0.1659f), // 11: top-left curve
+      pt(0.2497f, 0.1990f), // 0: left junction (9 o'clock)
+      pt(0.3041f, 0.2484f), // 1: bottom-left curve
+      pt(0.3980f, 0.2685f), // 2: boarding start
+      pt(0.5000f, 0.2735f), // 3: bottom-center boarding spot
+      pt(0.6020f, 0.2685f), // 4: boarding end
+      pt(0.6980f, 0.2489f), // 5: bottom-right curve
+      pt(0.7485f, 0.1990f), // 6: right junction (3 o'clock)
+      pt(0.6927f, 0.1504f), // 7: top-right curve
+      pt(0.5920f, 0.1294f), // 8: top-right arch
+      pt(0.5000f, 0.1246f), // 9: top-center
+      pt(0.4083f, 0.1296f), // 10: top-left arch
+      pt(0.3067f, 0.1503f), // 11: top-left curve
     )
     ringPoints = buildClosedCatmullRom(ringControl, stepsPerSeg = 22)
     ringLenDp = ringPoints.last().dist
@@ -78,23 +78,23 @@ class LaneGeometry(
     boardingEndDp = ringPoints[(4.35f * 22).toInt()].dist
 
     val leftArmControl = listOf(
-      pt(-0.005f, -0.020f),
-      pt(0.005f, 0.098f),
-      pt(0.045f, 0.1567f),
-      pt(0.100f, 0.1845f),
-      pt(0.165f, 0.2065f),
-      pt(0.2376f, 0.2180f),
+      pt(-0.005f, 0.045f),
+      pt(0.015f, 0.095f),
+      pt(0.045f, 0.132f),
+      pt(0.095f, 0.162f),
+      pt(0.165f, 0.184f),
+      pt(0.2497f, 0.1990f),
     )
     leftArmPoints = buildOpenCatmullRom(leftArmControl, stepsPerSeg = 20)
     leftArmLenDp = leftArmPoints.last().dist
 
     val rightArmControl = listOf(
-      pt(1.005f, -0.020f),
-      pt(0.995f, 0.105f),
-      pt(0.955f, 0.1610f),
-      pt(0.900f, 0.1885f),
-      pt(0.835f, 0.2055f),
-      pt(0.7694f, 0.2180f),
+      pt(1.005f, 0.045f),
+      pt(0.985f, 0.095f),
+      pt(0.955f, 0.134f),
+      pt(0.905f, 0.163f),
+      pt(0.835f, 0.184f),
+      pt(0.7485f, 0.1990f),
     )
     rightArmPoints = buildOpenCatmullRom(rightArmControl, stepsPerSeg = 20)
     rightArmLenDp = rightArmPoints.last().dist
@@ -123,24 +123,23 @@ class LaneGeometry(
   }
 
   /**
-   * Smooth perspective scale matching the local asphalt width of game_play_bg:
-   * - Top arch (~20.0dp half-width): 0.98x
-   * - Bottom arch (~20.5dp half-width): 1.02x
-   * - Corners (~23.5dp half-width): 1.12x
-   * - Sides & lower feeder arms (~26-30dp half-width): 1.16x
+   * Smooth perspective scale matching the local asphalt width of the new game_play_bg:
+   * - Top arch: 0.96x
+   * - Bottom arch: 1.03x
+   * - Sides & lower feeder arms: 1.15x
    */
   fun passengerScale(segment: ConveyorSegment, distDp: Float): Float {
     val s = sample(segment, distDp)
     val nx = (s.x / widthDp).coerceIn(0f, 1f)
     val ny = (s.y / heightDp).coerceIn(0f, 0.4f)
     if (segment != ConveyorSegment.RING) {
-      val junctionBlend = ((ny - 0.10f) / 0.12f).coerceIn(0f, 1f)
-      return 1.04f + 0.12f * junctionBlend
+      val junctionBlend = ((ny - 0.08f) / 0.12f).coerceIn(0f, 1f)
+      return 1.03f + 0.12f * junctionBlend
     }
     // How close to horizontal sides vs top/bottom centerlines
-    val sideFactor = (abs(nx - 0.502f) / 0.268f).coerceIn(0f, 1f)
-    val bottomFactor = if (ny > 0.22f) 1.02f else 0.98f
-    return bottomFactor + (1.16f - bottomFactor) * (sideFactor * sideFactor)
+    val sideFactor = (abs(nx - 0.500f) / 0.250f).coerceIn(0f, 1f)
+    val bottomFactor = if (ny > 0.200f) 1.03f else 0.96f
+    return bottomFactor + (1.15f - bottomFactor) * (sideFactor * sideFactor)
   }
 
   fun localSafeHalfRoadWidthDp(segment: ConveyorSegment, distDp: Float): Float {

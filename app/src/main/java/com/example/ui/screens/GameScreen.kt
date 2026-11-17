@@ -70,7 +70,6 @@ import com.example.ui.components.ParkingLotCanvas
 import com.example.ui.components.PauseDialog
 import com.example.ui.components.PlayfieldEffectsOverlay
 import com.example.ui.components.ShopDialog
-import com.example.ui.components.SideBushesOverlay
 import com.example.ui.components.UnlockSlotDialog
 import com.example.ui.components.WaitingSlotsRow
 import com.example.ui.components.WinLevelDialog
@@ -134,14 +133,13 @@ fun GameScreen(
   ) {
     val screenH = maxHeight
 
-    // 1. Exact full-bleed gameplay background + green side bushes matching reference layout
+    // 1. Exact full-bleed gameplay background (glossy racetrack + waiting bays + yellow curbs + corner park bushes)
     Image(
       painter = painterResource(id = R.drawable.game_play_bg),
       contentDescription = null,
       contentScale = ContentScale.FillBounds,
       modifier = Modifier.fillMaxSize(),
     )
-    SideBushesOverlay(modifier = Modifier.fillMaxSize())
 
     // 2. ZONE 1: Passengers circulating along the background's oval road loop & left/right arms
     ConveyorTrackView(
@@ -161,13 +159,13 @@ fun GameScreen(
       modifier = Modifier.fillMaxSize(),
     )
 
-    // 4. ZONE 2: Middle Parking Lot + Tunnels + Vehicles positioned inside the grey asphalt area
+    // 4. ZONE 2: Middle Parking Lot + Tunnels + Vehicles positioned cleanly inside the grey asphalt area
     Box(
       modifier =
         Modifier
-          .offset(y = screenH * 0.436f)
+          .offset(y = screenH * 0.422f)
           .fillMaxWidth()
-          .height(screenH * 0.434f)
+          .height(screenH * 0.455f)
     ) {
       ParkingLotCanvas(
         gridCols = uiState.gridCols,
