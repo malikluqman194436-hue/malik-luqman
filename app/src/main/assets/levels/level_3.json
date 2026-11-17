@@ -1,0 +1,25 @@
+{
+  "level": 3,
+  "gridCols": 3,
+  "gridRows": 3,
+  "buses": [
+    { "id": 1, "color": "yellow", "x": 0.5, "y": 0.5, "orientation": "horizontal", "dir": "left", "capacity": 12 },
+    { "id": 2, "color": "red", "x": 2.5, "y": 0.5, "orientation": "horizontal", "dir": "right", "capacity": 12 },
+    { "id": 3, "color": "blue", "x": 0.5, "y": 1.5, "orientation": "vertical", "dir": "up", "capacity": 12 },
+    { "id": 4, "color": "green", "x": 1.5, "y": 1.5, "orientation": "vertical", "dir": "up", "capacity": 12 },
+    { "id": 5, "color": "yellow", "x": 2.5, "y": 1.5, "orientation": "vertical", "dir": "up", "capacity": 12 },
+    { "id": 6, "color": "green", "x": 0.5, "y": 2.5, "orientation": "horizontal", "dir": "left", "capacity": 12 },
+    { "id": 7, "color": "blue", "x": 2.5, "y": 2.5, "orientation": "horizontal", "dir": "right", "capacity": 12 }
+  ],
+  "passengerBlocks": [
+    { "color": "yellow", "rows": 3 },
+    { "color": "red", "rows": 3 },
+    { "color": "blue", "rows": 3 },
+    { "color": "green", "rows": 3 },
+    { "color": "yellow", "rows": 3 },
+    { "color": "green", "rows": 3 },
+    { "color": "blue", "rows": 3 }
+  ],
+  "slots": 5,
+  "conveyorSpeed": 45
+}

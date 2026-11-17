@@ -1,0 +1,50 @@
+package com.example.ui.theme
+
+import androidx.compose.ui.graphics.Color
+
+// Hyper-casual vibrant palette
+val SkyTop = Color(0xFF3CB4FF)
+val SkyBottom = Color(0xFF9BE2FF)
+val OceanBlue = Color(0xFF1A96E8)
+val SandWarm = Color(0xFFFFE59E)
+val GrassBright = Color(0xFF56C94F)
+val CottageTeal = Color(0xFF1FA6A8)
+val CottageRoof = Color(0xFFFF7A59)
+
+val AsphaltBase = Color(0xFF4B5566)
+val AsphaltDark = Color(0xFF3A4250)
+val CurbWhite = Color(0xFFF3F6FA)
+val TrackDeck = Color(0xFFDDE7F3)
+val TrackBelt = Color(0xFF6B778D)
+val TrackSlat = Color(0xFF8391A9)
+
+val OutlineInk = Color(0xFF1C2638)
+val GoldCoin = Color(0xFFFFC929)
+val GoldCoinDark = Color(0xFFE69B00)
+val VipGold = Color(0xFFFFD447)
+val VipGoldBorder = Color(0xFFC97A00)
+
+val PlayGreen = Color(0xFF33C759)
+val PlayGreenDark = Color(0xFF1E9A3F)
+val HudBlue = Color(0xFF2896FF)
+val HudBlueDark = Color(0xFF1669C9)
+val ShopPurple = Color(0xFF8E44EC)
+val ShopPurpleDark = Color(0xFF6422BA)
+val AlertRed = Color(0xFFFF4B4B)
+
+val PrimaryLight = Color(0xFF1982FC)
+val OnPrimaryLight = Color(0xFFFFFFFF)
+val PrimaryContainerLight = Color(0xFFD6E9FF)
+val OnPrimaryContainerLight = Color(0xFF002B5C)
+val SecondaryLight = Color(0xFF2DC653)
+val OnSecondaryLight = Color(0xFFFFFFFF)
+val SecondaryContainerLight = Color(0xFFD2F7DA)
+val OnSecondaryContainerLight = Color(0xFF063915)
+val TertiaryLight = Color(0xFFFF9F1C)
+val OnTertiaryLight = Color(0xFFFFFFFF)
+val BackgroundLight = Color(0xFFF2F7FF)
+val SurfaceLight = Color(0xFFFFFFFF)
+val OnBackgroundLight = Color(0xFF1C2638)
+val OnSurfaceLight = Color(0xFF1C2638)
+val SurfaceVariantLight = Color(0xFFE4ECF7)
+val OnSurfaceVariantLight = Color(0xFF4A5870)

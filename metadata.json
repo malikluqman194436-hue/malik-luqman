@@ -1,0 +1,6 @@
+{
+  "name": "Bus Jam",
+  "description": "Bright hyper-casual bus parking jam puzzle game with conveyor boarding, tunnels, and boosters.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

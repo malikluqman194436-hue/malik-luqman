@@ -1,0 +1,33 @@
+{
+  "level": 1,
+  "gridCols": 3,
+  "gridRows": 4,
+  "buses": [
+    { "id": 1, "color": "purple", "x": 0.88, "y": 0.50, "orientation": "horizontal", "dir": "left", "capacity": 16 },
+    { "id": 2, "color": "purple", "x": 2.12, "y": 0.50, "orientation": "horizontal", "dir": "left", "capacity": 16 },
+    { "id": 3, "color": "white", "x": 0.50, "y": 1.48, "orientation": "vertical", "dir": "up", "capacity": 16 },
+    { "id": 4, "color": "green", "x": 1.50, "y": 1.48, "orientation": "vertical", "dir": "up", "capacity": 16 },
+    { "id": 5, "color": "cyan", "x": 2.50, "y": 1.48, "orientation": "vertical", "dir": "up", "capacity": 16 },
+    { "id": 6, "color": "green", "x": 0.94, "y": 2.46, "orientation": "horizontal", "dir": "right", "capacity": 16 },
+    { "id": 7, "color": "green", "x": 2.18, "y": 2.46, "orientation": "horizontal", "dir": "right", "capacity": 16 },
+    { "id": 8, "color": "cyan", "x": 0.50, "y": 3.44, "orientation": "vertical", "dir": "up", "capacity": 16 },
+    { "id": 9, "color": "purple", "x": 1.50, "y": 3.44, "orientation": "vertical", "dir": "up", "capacity": 16 },
+    { "id": 10, "color": "white", "x": 2.50, "y": 3.44, "orientation": "vertical", "dir": "up", "capacity": 16 }
+  ],
+  "passengerBlocks": [
+    { "color": "purple", "rows": 4 },
+    { "color": "white", "rows": 4 },
+    { "color": "green", "rows": 4 },
+    { "color": "purple", "rows": 4 },
+    { "color": "green", "rows": 4 },
+    { "color": "cyan", "rows": 4 },
+    { "color": "green", "rows": 4 },
+    { "color": "cyan", "rows": 4 },
+    { "color": "purple", "rows": 4 },
+    { "color": "white", "rows": 4 }
+  ],
+  "slots": 5,
+  "conveyorSpeed": 40,
+  "isTutorial": true,
+  "tutorialHint": "Tap any clear car to send it to a tilted waiting stand!"
+}
