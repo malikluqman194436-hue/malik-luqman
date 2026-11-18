@@ -20,10 +20,10 @@ enum class VehicleColor(
     fill = Color(0xFFF21B3F),
     highlight = Color(0xFFFF7A93),
     shade = Color(0xFF9C0F28),
-    passengerFill = Color(0xFFFF6E94),
-    roofLight = Color(0xFFFF9DB8),
-    roofMain = Color(0xFFFF6E94),
-    roofDark = Color(0xFFC43D66),
+    passengerFill = Color(0xFFF21B3F),
+    roofLight = Color(0xFFFF7A93),
+    roofMain = Color(0xFFF21B3F),
+    roofDark = Color(0xFF9C0F28),
   ),
   BLUE(
     assetKey = "blue",
@@ -116,7 +116,7 @@ enum class VehicleColor(
 
   companion object {
     val busColors: List<VehicleColor> =
-      listOf(BLUE, RED, PURPLE, GREEN, YELLOW, ORANGE)
+      listOf(RED, BLUE, GREEN, YELLOW, PURPLE, ORANGE)
   }
 }
 
