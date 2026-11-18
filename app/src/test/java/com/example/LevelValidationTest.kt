@@ -27,32 +27,50 @@ class LevelValidationTest {
   }
 
   @Test
-  fun levelProgressionBusCountsColorsAndNoBlockedInLevel1() {
-    val l1 = LevelRepository.getLevel(1)
-    assertEquals("Level 1 must have 12 buses", 12, l1.vehicles.size)
-    assertEquals("Level 1 must have 3 colors", 3, l1.vehicles.map { it.color }.distinct().size)
-    assertTrue("Level 1 must include 40-passenger buses", l1.vehicles.any { it.capacity == 40 })
-    val l1Entities =
-      l1.vehicles.mapIndexed { idx, spec ->
-        VehicleEntity(idx + 1, spec.color, spec.direction, spec.capacity, spec.x, spec.y)
-      }
-    val clearStarterCount =
-      l1Entities.count { v ->
-        CollisionEngine.checkPath(v, l1Entities, l1.gridCols, l1.gridRows).isClear
-      }
-    assertTrue("Level 1 must have clear starter buses", clearStarterCount >= 3)
+  fun levelProgressionAlwaysHas10StraightBusesCapacity40EscalatingColorsAndTrafficJam() {
+    for (levelNum in 1..30) {
+      val def = LevelRepository.getLevel(levelNum)
+      assertEquals("Level $levelNum must have 10 buses", 10, def.vehicles.size)
+      assertTrue(
+        "Every bus in Level $levelNum must hold 40 passengers",
+        def.vehicles.all { it.capacity == 40 },
+      )
+      assertTrue(
+        "Every bus in Level $levelNum must be straight (cardinal direction)",
+        def.vehicles.none { it.direction.isDiagonal },
+      )
 
-    assertEquals(16, LevelRepository.getLevel(2).vehicles.size)
-    assertEquals(18, LevelRepository.getLevel(3).vehicles.size)
-    assertEquals(20, LevelRepository.getLevel(4).vehicles.size)
-    assertEquals(22, LevelRepository.getLevel(5).vehicles.size)
-    assertEquals(24, LevelRepository.getLevel(6).vehicles.size)
-    assertEquals(24, LevelRepository.getLevel(20).vehicles.size)
-    assertEquals(24, LevelRepository.getLevel(25).vehicles.size)
+      val expectedColors = (3 + (levelNum - 1) / 2).coerceIn(3, 6)
+      assertEquals(
+        "Level $levelNum color count",
+        expectedColors,
+        def.vehicles.map { it.color }.distinct().size,
+      )
+      assertEquals(40f + (levelNum - 1) * 1f, def.conveyorSpeedDpPerSec, 0.01f)
+
+      val entities =
+        def.vehicles.mapIndexed { idx, spec ->
+          VehicleEntity(idx + 1, spec.color, spec.direction, spec.capacity, spec.x, spec.y)
+        }
+      val blockedAtStart =
+        entities.count { v -> !CollisionEngine.checkPath(v, entities, def.gridCols, def.gridRows).isClear }
+      assertTrue(
+        "Level $levelNum must start with a real traffic jam (~half blocked, got $blockedAtStart)",
+        blockedAtStart in 3..8,
+      )
+      assertTrue(
+        "Level $levelNum must have at least 2 clear starter buses",
+        entities.size - blockedAtStart >= 2,
+      )
+    }
+
+    assertEquals(4, LevelRepository.getLevel(1).freeSlots)
+    assertEquals(3, LevelRepository.getLevel(5).freeSlots)
+    assertEquals(2, LevelRepository.getLevel(10).freeSlots)
   }
 
   @Test
-  fun allLevels1Through30HaveValidCapacitiesNoOverlapsExactParityAndDfsSolvability() {
+  fun allLevels1Through30HaveNoOverlapsExact40PerBusParityAndGreedyDfsSolvability() {
     for (levelNum in 1..30) {
       val def = LevelRepository.getLevel(levelNum)
       val entities =
@@ -67,12 +85,9 @@ class LevelValidationTest {
           )
         }
 
-      // 1. Capacity must be a multiple of 4 (>= 8) and no overlaps
+      // 1. Capacity must be 40 and no overlaps
       for (v in def.vehicles) {
-        assertTrue(
-          "Level $levelNum vehicle capacity must be >= 8 and multiple of 4 (got ${v.capacity})",
-          v.capacity >= 8 && v.capacity % 4 == 0,
-        )
+        assertEquals("Level $levelNum vehicle capacity must be 40", 40, v.capacity)
       }
       for (i in entities.indices) {
         val boxA = CollisionEngine.boxForVehicle(entities[i])
@@ -85,14 +100,19 @@ class LevelValidationTest {
         }
       }
 
-      // 2. Check DFS solvability
+      // 2. Check greedy exit-order solver AND DFS solvability
+      assertTrue(
+        "Level $levelNum must be solvable by greedy free-exit removal",
+        CollisionEngine.isGreedySolvable(entities, def.gridCols, def.gridRows),
+      )
       val tunnels = def.tunnels.mapIndexed { idx, t -> TunnelState(idx + 1, t.side, t.row, t.queue) }
       assertTrue(
         "Level $levelNum must be DFS solvable",
         CollisionEngine.canClearAll(entities, tunnels, def.gridCols, def.gridRows),
       )
 
-      // 3. Check exact color parity between 4-passenger rows and bus capacities
+      // 3. Check exact color parity: 40 * busesOfColor passengers for every color
+      assertEquals(400, def.passengerSequence.size)
       assertEquals(
         "Level $levelNum passenger count must be multiple of 4",
         0,
@@ -100,11 +120,11 @@ class LevelValidationTest {
       )
       val vehicleCapByColor = mutableMapOf<VehicleColor, Int>()
       for (v in def.vehicles) {
-        vehicleCapByColor[v.color] = (vehicleCapByColor[v.color] ?: 0) + v.capacity
+        vehicleCapByColor[v.color] = (vehicleCapByColor[v.color] ?: 0) + 40
       }
       val passengersByColor = def.passengerSequence.groupingBy { it }.eachCount()
       assertEquals(
-        "Level $levelNum passenger color totals must match vehicle capacities",
+        "Level $levelNum passenger color totals must be 40 x buses of that color",
         vehicleCapByColor.filterValues { it > 0 },
         passengersByColor,
       )

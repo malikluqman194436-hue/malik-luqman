@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -155,6 +156,7 @@ fun GameScreen(
     WaitingSlotsRow(
       slots = uiState.slots,
       vehicles = uiState.vehicles,
+      jumpingPassengers = uiState.jumpingPassengers,
       onSlotTap = { viewModel.onSlotTapped(it) },
       modifier = Modifier.fillMaxSize(),
     )
@@ -163,9 +165,9 @@ fun GameScreen(
     Box(
       modifier =
         Modifier
-          .offset(y = screenH * 0.422f)
+          .offset(y = screenH * 0.398f)
           .fillMaxWidth()
-          .height(screenH * 0.455f)
+          .height(screenH * 0.475f)
     ) {
       ParkingLotCanvas(
         gridCols = uiState.gridCols,
@@ -184,6 +186,7 @@ fun GameScreen(
         Modifier
           .align(Alignment.TopCenter)
           .windowInsetsPadding(WindowInsets.statusBars)
+          .windowInsetsPadding(WindowInsets.displayCutout)
           .widthIn(max = 560.dp)
           .fillMaxWidth()
           .padding(horizontal = 10.dp, vertical = 6.dp),

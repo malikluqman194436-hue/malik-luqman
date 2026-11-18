@@ -26,7 +26,8 @@ object LevelJsonCodec {
     val gridCols = root.optInt("gridCols", 6)
     val gridRows = root.optInt("gridRows", 7)
     val conveyorSpeed = root.optDouble("conveyorSpeed", 40.0).toFloat()
-    val isTutorial = root.optBoolean("isTutorial", level <= 2)
+    val freeSlots = root.optInt("slots", 4).coerceIn(2, 4)
+    val isTutorial = root.optBoolean("isTutorial", level <= 1)
     val tutorialHint = if (root.has("tutorialHint") && !root.isNull("tutorialHint")) {
       root.optString("tutorialHint")
     } else null
@@ -65,12 +66,13 @@ object LevelJsonCodec {
       tunnels = emptyList(),
       passengerSequence = passengerSequence,
       conveyorSpeedDpPerSec = conveyorSpeed,
+      freeSlots = freeSlots,
       isTutorial = isTutorial,
       tutorialHintText = tutorialHint,
     )
   }
 
-  fun toJson(def: LevelDefinition, slots: Int = 5): String {
+  fun toJson(def: LevelDefinition, slots: Int = def.freeSlots): String {
     val root = JSONObject()
     root.put("level", def.levelNumber)
     root.put("gridCols", def.gridCols)

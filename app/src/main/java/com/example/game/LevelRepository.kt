@@ -6,6 +6,10 @@ import kotlin.random.Random
 
 object LevelRepository {
 
+  private const val BUSES_PER_LEVEL = 10
+  private const val BUS_CAPACITY = 40
+
+  @Suppress("unused")
   private var appAssets: AssetManager? = null
 
   fun init(context: Context) {
@@ -14,238 +18,251 @@ object LevelRepository {
 
   fun getLevel(levelNumber: Int): LevelDefinition {
     val safeLevel = levelNumber.coerceAtLeast(1)
-
-    // 1. Load handcrafted / JSON-defined levels from assets/levels/level_<N>.json when available
-    val assets = appAssets
-    if (assets != null) {
-      try {
-        assets.open("levels/level_$safeLevel.json").bufferedReader().use { reader ->
-          return LevelJsonCodec.fromJson(reader.readText())
-        }
-      } catch (_: Exception) {
-        // Fall through to built-in definitions / reverse-simulation generator
-      }
-    }
-
-    // 2. Built-in fallback for Level 1 (matching level_1.json)
-    buildBuiltInJsonFallback(safeLevel)?.let { return it }
-
-    // 3. Procedural reverse-simulation generator verified with DFS solver
-    return generateReverseSimulatedLevel(safeLevel)
-  }
-
-  private fun buildBuiltInJsonFallback(level: Int): LevelDefinition? {
-    return when (level) {
-      1 ->
-        assembleFromSpecs(
-          level = 1,
-          cols = 3,
-          rows = 4,
-          vehicles =
-            listOf(
-              VehicleSpec(0.50f, 0.50f, VehicleColor.BLUE, Direction.UP, 24),
-              VehicleSpec(1.50f, 0.50f, VehicleColor.RED, Direction.UP, 40),
-              VehicleSpec(2.50f, 0.50f, VehicleColor.YELLOW, Direction.RIGHT, 24),
-              VehicleSpec(0.50f, 1.50f, VehicleColor.RED, Direction.LEFT, 20),
-              VehicleSpec(1.50f, 1.50f, VehicleColor.YELLOW, Direction.UP, 16),
-              VehicleSpec(2.50f, 1.50f, VehicleColor.BLUE, Direction.UP, 36),
-              VehicleSpec(0.50f, 2.50f, VehicleColor.YELLOW, Direction.UP, 28),
-              VehicleSpec(1.50f, 2.50f, VehicleColor.BLUE, Direction.UP, 32),
-              VehicleSpec(2.50f, 2.50f, VehicleColor.RED, Direction.UP, 16),
-              VehicleSpec(0.50f, 3.50f, VehicleColor.YELLOW, Direction.UP, 24),
-              VehicleSpec(1.50f, 3.50f, VehicleColor.RED, Direction.DOWN, 40),
-              VehicleSpec(2.50f, 3.50f, VehicleColor.BLUE, Direction.LEFT, 16),
-            ),
-          conveyorSpeed = 40f,
-          isTutorial = true,
-          tutorialHint = "Tap any clear car to send it to a waiting stand!",
-        )
-
-      else -> null
-    }
+    return generateTrafficJamLevel(safeLevel)
   }
 
   private fun paletteForLevel(level: Int): List<VehicleColor> {
+    val colorCount = (3 + (level - 1) / 2).coerceIn(3, 6)
+    return VehicleColor.busColors.take(colorCount)
+  }
+
+  private fun freeSlotsForLevel(level: Int): Int {
     return when {
-      level == 1 -> listOf(VehicleColor.RED, VehicleColor.BLUE, VehicleColor.YELLOW)
-      level == 2 -> listOf(VehicleColor.RED, VehicleColor.BLUE, VehicleColor.YELLOW, VehicleColor.GREEN, VehicleColor.PURPLE)
-      level <= 4 ->
-        listOf(
-          VehicleColor.RED,
-          VehicleColor.BLUE,
-          VehicleColor.YELLOW,
-          VehicleColor.GREEN,
-          VehicleColor.PURPLE,
-          VehicleColor.ORANGE,
-        )
-      level <= 6 ->
-        listOf(
-          VehicleColor.RED,
-          VehicleColor.BLUE,
-          VehicleColor.YELLOW,
-          VehicleColor.GREEN,
-          VehicleColor.PURPLE,
-          VehicleColor.ORANGE,
-          VehicleColor.CYAN,
-        )
-      else -> VehicleColor.busColors
+      level <= 4 -> 4
+      level <= 9 -> 3
+      else -> 2
     }
   }
 
-  private fun capacitiesForLevel(level: Int): List<Int> {
-    return when {
-      level <= 2 -> listOf(16, 20, 24, 32, 36, 40)
-      level <= 5 -> listOf(20, 24, 28, 32, 36, 40)
-      else -> listOf(24, 28, 32, 36, 40)
+  private data class PlacementCandidate(
+    val col: Int,
+    val row: Int,
+    val dir: Direction,
+    val cx: Float,
+    val cy: Float,
+    val cells: List<Pair<Int, Int>>,
+  )
+
+  private fun allPlacements(gridCols: Int, gridRows: Int): List<PlacementCandidate> {
+    val list = ArrayList<PlacementCandidate>(gridCols * gridRows * 4)
+    for (r in 0 until gridRows - 1) {
+      for (c in 0 until gridCols) {
+        val cells = listOf(c to r, c to (r + 1))
+        list.add(PlacementCandidate(c, r, Direction.UP, c + 0.5f, r + 1.0f, cells))
+        list.add(PlacementCandidate(c, r, Direction.DOWN, c + 0.5f, r + 1.0f, cells))
+      }
     }
+    for (r in 0 until gridRows) {
+      for (c in 0 until gridCols - 1) {
+        val cells = listOf(c to r, (c + 1) to r)
+        list.add(PlacementCandidate(c, r, Direction.LEFT, c + 1.0f, r + 0.5f, cells))
+        list.add(PlacementCandidate(c, r, Direction.RIGHT, c + 1.0f, r + 0.5f, cells))
+      }
+    }
+    return list
   }
 
   /**
-   * Reverse-simulation generator strictly on neat grid cells (c + 0.5, r + 0.5):
-   * - Starts with an empty grid.
-   * - Places buses cell-by-cell so each newly placed bus has a clear exit past earlier ones.
-   * - Verifies solvability with CollisionEngine.canClearAll() DFS solver before returning.
+   * Generates a 10-bus compact 1x2 / 2x1 lattice traffic-jam level:
+   * - Places buses 1..10 one at a time, sampling ~150 random positions/directions per bus.
+   * - Candidate is valid only if it does not overlap existing buses AND its straight exit path
+   *   to the lot edge is clear of all buses placed BEFORE it.
+   * - Picks the valid candidate blocking the largest number of already-placed buses (+ small tie breaker).
+   * - Centers the occupied lattice block, verifies with the greedy solver + DFS solver,
+   *   and ensures roughly half of buses start blocked (~4..7 out of 10).
    */
-  private fun generateReverseSimulatedLevel(levelNumber: Int): LevelDefinition {
-    val targetBuses =
-      when {
-        levelNumber == 1 -> 12
-        levelNumber <= 6 -> (12 + levelNumber * 2).coerceAtMost(24)
-        else -> 24
-      }
-    val cols = if (targetBuses <= 12) 3 else 4
-    val rows = ((targetBuses + cols - 1) / cols).coerceAtLeast(3)
-
+  private fun generateTrafficJamLevel(levelNumber: Int): LevelDefinition {
     val palette = paletteForLevel(levelNumber)
-    val capacitiesPool = capacitiesForLevel(levelNumber)
-    val baseSpeed = (40f + (levelNumber - 1) * 2.5f).coerceAtMost(85f)
-    val cardinalDirs = listOf(Direction.UP, Direction.DOWN, Direction.LEFT, Direction.RIGHT)
-
-    val cellCenters =
-      buildList {
-        for (r in 0 until rows) {
-          for (c in 0 until cols) {
-            add(Pair(c + 0.5f, r + 0.5f))
-          }
-        }
-      }
-
+    val baseSpeed = 40f + (levelNumber - 1) * 1f
+    val freeSlots = freeSlotsForLevel(levelNumber)
     val baseSeed = levelNumber * 104729L + 7919L
-    for (attempt in 0 until 80) {
+
+    for (attempt in 0 until 120) {
       val rng = Random(baseSeed + attempt * 977L)
+      val gridW = if (attempt < 80) 6 else 7
+      val gridH = if (attempt < 80) 6 else 7
+      val allCandidates = allPlacements(gridW, gridH)
+
+      val levelColors =
+        List(BUSES_PER_LEVEL) { idx -> palette[idx % palette.size] }.shuffled(rng)
+
+      val occupiedCells = HashSet<Pair<Int, Int>>(BUSES_PER_LEVEL * 2)
       val placedSpecs = mutableListOf<VehicleSpec>()
       val placedEntities = mutableListOf<VehicleEntity>()
+      val placedCellLists = mutableListOf<List<Pair<Int, Int>>>()
       var nextId = 1
 
-      val cells = cellCenters.shuffled(rng)
-      for ((cx, cy) in cells) {
-        if (placedSpecs.size >= targetBuses) break
+      for (busIdx in 0 until BUSES_PER_LEVEL) {
+        val color = levelColors[busIdx]
+        val samplePool = allCandidates.shuffled(rng).take(150)
 
-        val cap = capacitiesPool[rng.nextInt(capacitiesPool.size)]
-        val color = palette[(placedSpecs.size + attempt) % palette.size]
+        var bestCand: PlacementCandidate? = null
+        var bestEntity: VehicleEntity? = null
+        var bestScore = Int.MIN_VALUE
 
-        val validCandidates = mutableListOf<Pair<VehicleEntity, Int>>()
-        for (dir in cardinalDirs.shuffled(rng)) {
-          val cand =
+        for (cand in samplePool) {
+          if (cand.cells.any { it in occupiedCells }) continue
+
+          val entity =
             VehicleEntity(
               id = nextId,
               color = color,
-              direction = dir,
-              capacity = cap,
-              x = cx,
-              y = cy,
+              direction = cand.dir,
+              capacity = BUS_CAPACITY,
+              x = cand.cx,
+              y = cand.cy,
             )
-          if (CollisionEngine.checkPath(cand, placedEntities, cols, rows).isClear) {
-            val candBox = CollisionEngine.boxForVehicle(cand)
-            val blocksCount =
-              placedEntities.count { prev ->
-                CollisionEngine.overlaps(
-                  CollisionEngine.boxForVehicle(
-                    prev,
-                    prev.x + prev.direction.dx * 1.0f,
-                    prev.y + prev.direction.dy * 1.0f,
-                  ),
-                  candBox,
-                )
-              }
-            validCandidates.add(cand to blocksCount)
+
+          // Candidate's own straight exit path must be free of all buses placed BEFORE it
+          if (!CollisionEngine.checkPath(entity, placedEntities, gridW, gridH).isClear) continue
+
+          // Count how many already-placed buses this candidate blocks
+          val candOnly = listOf(entity)
+          val blocksCount =
+            placedEntities.count { prev ->
+              !CollisionEngine.checkPath(prev, candOnly, gridW, gridH).isClear
+            }
+          val score = blocksCount * 100 + rng.nextInt(15)
+          if (score > bestScore) {
+            bestScore = score
+            bestCand = cand
+            bestEntity = entity
           }
         }
 
-        if (validCandidates.isNotEmpty()) {
-          val chosen =
-            if (levelNumber >= 10) {
-              validCandidates.maxByOrNull { it.second }!!.first
-            } else {
-              validCandidates[rng.nextInt(validCandidates.size)].first
-            }
-          placedEntities.add(chosen)
-          placedSpecs.add(
-            VehicleSpec(
-              x = chosen.x,
-              y = chosen.y,
-              color = chosen.color,
-              direction = chosen.direction,
-              capacity = chosen.capacity,
-            )
+        if (bestCand == null || bestEntity == null) break
+
+        occupiedCells.addAll(bestCand.cells)
+        placedCellLists.add(bestCand.cells)
+        placedEntities.add(bestEntity)
+        placedSpecs.add(
+          VehicleSpec(
+            x = bestEntity.x,
+            y = bestEntity.y,
+            color = bestEntity.color,
+            direction = bestEntity.direction,
+            capacity = BUS_CAPACITY,
           )
-          nextId++
-        }
+        )
+        nextId++
       }
 
-      if (placedSpecs.size == targetBuses &&
-        CollisionEngine.canClearAll(placedEntities, emptyList(), cols, rows)
-      ) {
-        return assembleFromSpecs(
-          level = levelNumber,
-          cols = cols,
-          rows = rows,
-          vehicles = placedSpecs,
-          conveyorSpeed = baseSpeed,
-        )
-      }
+      if (placedSpecs.size != BUSES_PER_LEVEL) continue
+
+      // Trim bounding box so the 10-bus lattice sits tightly centered as a block in the lot
+      val allCells = placedCellLists.flatten()
+      val minC = allCells.minOf { it.first }
+      val maxC = allCells.maxOf { it.first }
+      val minR = allCells.minOf { it.second }
+      val maxR = allCells.maxOf { it.second }
+      val trimmedCols = (maxC - minC + 1).coerceAtLeast(2)
+      val trimmedRows = (maxR - minR + 1).coerceAtLeast(2)
+
+      val shiftedSpecs =
+        placedSpecs.map { spec ->
+          spec.copy(x = spec.x - minC, y = spec.y - minR)
+        }
+      val shiftedEntities =
+        placedEntities.map { e ->
+          e.copy(x = e.x - minC, y = e.y - minR)
+        }
+
+      // Verify with greedy exit-order solver AND check that about half start blocked
+      if (!CollisionEngine.isGreedySolvable(shiftedEntities, trimmedCols, trimmedRows)) continue
+      if (!CollisionEngine.canClearAll(shiftedEntities, emptyList(), trimmedCols, trimmedRows)) continue
+
+      val blockedAtStart =
+        shiftedEntities.count { !CollisionEngine.checkPath(it, shiftedEntities, trimmedCols, trimmedRows).isClear }
+      if (blockedAtStart < 4 && attempt < 90) continue
+
+      val finalSpecs =
+        if (levelNumber == 1) {
+          ensureStarterColor(shiftedSpecs, shiftedEntities, trimmedCols, trimmedRows, VehicleColor.PURPLE)
+        } else {
+          shiftedSpecs
+        }
+
+      return assembleFromSpecs(
+        level = levelNumber,
+        cols = trimmedCols,
+        rows = trimmedRows,
+        vehicles = finalSpecs,
+        conveyorSpeed = baseSpeed,
+        freeSlots = freeSlots,
+        isTutorial = levelNumber == 1,
+        tutorialHint = if (levelNumber == 1) "Tap any clear bus to send it to a waiting stand!" else null,
+      )
     }
 
     return buildSafeFallbackGrid(
       level = levelNumber,
-      cols = cols,
-      rows = rows,
-      targetBuses = targetBuses,
       palette = palette,
-      capacitiesPool = capacitiesPool,
       conveyorSpeed = baseSpeed,
+      freeSlots = freeSlots,
     )
+  }
+
+  private fun ensureStarterColor(
+    specs: List<VehicleSpec>,
+    entities: List<VehicleEntity>,
+    cols: Int,
+    rows: Int,
+    desiredColor: VehicleColor,
+  ): List<VehicleSpec> {
+    val clearIndices =
+      entities.indices.filter { idx ->
+        CollisionEngine.checkPath(entities[idx], entities, cols, rows).isClear
+      }
+    val firstClearIdx = clearIndices.firstOrNull() ?: return specs
+    if (specs[firstClearIdx].color == desiredColor) return specs
+    val desiredIdx = specs.indexOfFirst { it.color == desiredColor }
+    if (desiredIdx < 0) return specs
+    val mutable = specs.toMutableList()
+    val origClearColor = mutable[firstClearIdx].color
+    mutable[firstClearIdx] = mutable[firstClearIdx].copy(color = desiredColor)
+    mutable[desiredIdx] = mutable[desiredIdx].copy(color = origClearColor)
+    return mutable
   }
 
   private fun buildSafeFallbackGrid(
     level: Int,
-    cols: Int,
-    rows: Int,
-    targetBuses: Int,
     palette: List<VehicleColor>,
-    capacitiesPool: List<Int>,
     conveyorSpeed: Float,
+    freeSlots: Int,
   ): LevelDefinition {
-    val specs = mutableListOf<VehicleSpec>()
-    var idx = 0
-    for (r in 0 until rows) {
-      for (c in 0 until cols) {
-        if (specs.size >= targetBuses) break
-        val cx = c + 0.5f
-        val cy = r + 0.5f
-        val cap = capacitiesPool[idx % capacitiesPool.size]
-        val color = palette[idx % palette.size]
-        val dir = if (c < cols / 2) Direction.LEFT else Direction.RIGHT
-        specs.add(VehicleSpec(cx, cy, color, dir, cap))
-        idx++
+    // Clean deterministic 6x4 compact 10-bus traffic-jam lattice (5 blocked at start, strictly solvable)
+    val layout =
+      listOf(
+        Triple(0.5f, 1.0f, Direction.UP),
+        Triple(1.5f, 1.0f, Direction.UP),
+        Triple(2.5f, 1.0f, Direction.DOWN),
+        Triple(3.5f, 1.0f, Direction.DOWN),
+        Triple(4.5f, 1.0f, Direction.RIGHT),
+        Triple(1.0f, 2.5f, Direction.LEFT),
+        Triple(3.0f, 2.5f, Direction.RIGHT),
+        Triple(5.5f, 1.0f, Direction.UP),
+        Triple(1.0f, 3.5f, Direction.DOWN),
+        Triple(4.0f, 3.5f, Direction.RIGHT),
+      )
+    val specs =
+      layout.mapIndexed { idx, (x, y, dir) ->
+        VehicleSpec(
+          x = x,
+          y = y,
+          color = palette[idx % palette.size],
+          direction = dir,
+          capacity = BUS_CAPACITY,
+        )
       }
-    }
     return assembleFromSpecs(
       level = level,
-      cols = cols,
-      rows = rows,
+      cols = 6,
+      rows = 4,
       vehicles = specs,
       conveyorSpeed = conveyorSpeed,
+      freeSlots = freeSlots,
+      isTutorial = level == 1,
+      tutorialHint = if (level == 1) "Tap any clear bus to send it to a waiting stand!" else null,
     )
   }
 
@@ -255,17 +272,62 @@ object LevelRepository {
     rows: Int,
     vehicles: List<VehicleSpec>,
     conveyorSpeed: Float,
+    freeSlots: Int = 4,
     isTutorial: Boolean = false,
     tutorialHint: String? = null,
   ): LevelDefinition {
     val exitOrder = computeExitOrder(vehicles, cols, rows)
     val passengerSequence = mutableListOf<VehicleColor>()
 
-    val remainingPerVehicle = exitOrder.toMutableList()
-    if (level >= 4 && remainingPerVehicle.size >= 3) {
+    val remainingByColor = LinkedHashMap<VehicleColor, Int>()
+    for ((c, cap) in exitOrder) {
+      remainingByColor[c] = (remainingByColor[c] ?: 0) + cap
+    }
+
+    // For 3-color levels (Blue, Pink/Red, Purple), arrange the first ~52 rows (208 passengers)
+    // to fill the round ring in 3 pure blocks: Purple at bottom, Blue on left, Pink upper-right.
+    val hasTrioPalette =
+      remainingByColor.size == 3 &&
+        remainingByColor.containsKey(VehicleColor.BLUE) &&
+        remainingByColor.containsKey(VehicleColor.RED) &&
+        remainingByColor.containsKey(VehicleColor.PURPLE)
+
+    if (hasTrioPalette) {
+      fun takeColorCount(color: VehicleColor, desiredCount: Int) {
+        val avail = remainingByColor[color] ?: 0
+        val take = minOf(desiredCount, avail)
+        if (take > 0) {
+          repeat(take) { passengerSequence.add(color) }
+          remainingByColor[color] = avail - take
+        }
+      }
+      // rowIdx 0..10 (bottom & bottom-left): Purple
+      takeColorCount(VehicleColor.PURPLE, 44)
+      // rowIdx 11..29 (left side up to 12 o'clock): Blue
+      takeColorCount(VehicleColor.BLUE, 76)
+      // rowIdx 30..45 (top-right / middle section): Pink (RED)
+      takeColorCount(VehicleColor.RED, 64)
+      // rowIdx 46..51 (bottom-right meeting bottom): Purple
+      takeColorCount(VehicleColor.PURPLE, 24)
+
+      // Distribute remaining feeder-arm passengers cleanly in 16-passenger (4-row) waves
+      val waveOrder = listOf(VehicleColor.BLUE, VehicleColor.RED, VehicleColor.PURPLE)
+      while (remainingByColor.values.any { it > 0 }) {
+        for (c in waveOrder) {
+          val rem = remainingByColor[c] ?: 0
+          if (rem > 0) {
+            val take = minOf(16, rem)
+            repeat(take) { passengerSequence.add(c) }
+            remainingByColor[c] = rem - take
+          }
+        }
+      }
+    } else {
+      val remainingPerVehicle = exitOrder.toMutableList()
+      val windowSize = freeSlots.coerceIn(2, 4)
       var cursor = 0
       while (cursor < remainingPerVehicle.size) {
-        val windowEnd = (cursor + 3).coerceAtMost(remainingPerVehicle.size)
+        val windowEnd = (cursor + windowSize).coerceAtMost(remainingPerVehicle.size)
         var anyLeftInWindow = true
         while (anyLeftInWindow) {
           anyLeftInWindow = false
@@ -273,17 +335,13 @@ object LevelRepository {
             val (color, rem) = remainingPerVehicle[i]
             if (rem > 0) {
               anyLeftInWindow = true
-              val chunk = minOf(16, rem)
+              val chunk = minOf(12, rem)
               repeat(chunk) { passengerSequence.add(color) }
               remainingPerVehicle[i] = color to (rem - chunk)
             }
           }
         }
         cursor = windowEnd
-      }
-    } else {
-      for ((color, cap) in remainingPerVehicle) {
-        repeat(cap) { passengerSequence.add(color) }
       }
     }
 
@@ -295,6 +353,7 @@ object LevelRepository {
       tunnels = emptyList(),
       passengerSequence = passengerSequence,
       conveyorSpeedDpPerSec = conveyorSpeed,
+      freeSlots = freeSlots,
       isTutorial = isTutorial,
       tutorialHintText = tutorialHint,
     )

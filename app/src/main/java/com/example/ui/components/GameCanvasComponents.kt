@@ -43,8 +43,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.lerp
@@ -95,26 +98,27 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 
 private const val OVAL_CENTER_X_NORM = 0.500f
-private const val OVAL_CENTER_Y_NORM = 0.199f
+private const val OVAL_CENTER_Y_NORM = 0.170f
 private val SLOT_CENTERS_X_NORM = floatArrayOf(
-  0.1307f, // Slot 0 (VIP)
-  0.2395f, // Slot 1
-  0.3423f, // Slot 2
-  0.4397f, // Slot 3
-  0.5368f, // Slot 4
-  0.6391f, // Slot 5 (+ locked)
-  0.7454f, // Slot 6 (+ locked)
-  0.8517f, // Slot 7 (+ locked)
+  0.1313f, // Slot 0 (VIP)
+  0.2479f, // Slot 1
+  0.3481f, // Slot 2
+  0.4473f, // Slot 3
+  0.5512f, // Slot 4
+  0.6540f, // Slot 5 (+ locked)
+  0.7570f, // Slot 6 (+ locked)
+  0.8610f, // Slot 7 (+ locked)
 )
-private const val SLOT_CENTER_Y_NORM = 0.3540f
+private const val SLOT_CENTER_Y_NORM = 0.3280f
 private const val SLOT_TILT_DEG = -15.5f
 
 private fun slotCenterXNorm(index: Int): Float =
   if (index in SLOT_CENTERS_X_NORM.indices) SLOT_CENTERS_X_NORM[index]
-  else 0.1307f + index * 0.102f
+  else 0.1313f + index * 0.104f
 
 private data class LotMetrics(
   val stride: Float,
+  val gapPx: Float,
   val cellBoxPx: Float,
   val originX: Float,
   val originY: Float,
@@ -125,18 +129,30 @@ private fun computeLotMetrics(
   heightPx: Float,
   gridCols: Int,
   gridRows: Int,
+  density: Float = 3f,
 ): LotMetrics {
-  val baseCellPx = min((64f / 360f) * widthPx, heightPx * 0.20f)
-  val baseGapPx = (6.5f / 360f) * widthPx
-  val baseStride = baseCellPx + baseGapPx
+  val targetStride = (33f * density).coerceIn(28f * density, 38f * density)
   val maxAvailW = widthPx * 0.84f
-  val maxAvailH = heightPx * 0.92f
-  val stride = min(baseStride, min(maxAvailW / gridCols, maxAvailH / gridRows))
-  val scaleDown = stride / baseStride
-  val cellBoxPx = baseCellPx * scaleDown
+  val maxAvailH = heightPx * 0.90f
+  val stride =
+    min(
+      targetStride,
+      min(
+        maxAvailW / gridCols.coerceAtLeast(1),
+        maxAvailH / gridRows.coerceAtLeast(1),
+      ),
+    )
+  val gapPx = (stride * 0.16f).coerceIn(4f * density, 6f * density)
+  val cellBoxPx = stride - gapPx
   val originX = (widthPx - stride * gridCols) * 0.5f
   val originY = (heightPx - stride * gridRows) * 0.5f
-  return LotMetrics(stride = stride, cellBoxPx = cellBoxPx, originX = originX, originY = originY)
+  return LotMetrics(
+    stride = stride,
+    gapPx = gapPx,
+    cellBoxPx = cellBoxPx,
+    originX = originX,
+    originY = originY,
+  )
 }
 
 private fun DrawScope.drawMissingAssetError(
@@ -161,37 +177,34 @@ private fun DrawScope.drawMissingAssetError(
   )
 }
 
-private const val SHEET_COLS = 10
+private const val SHEET_COLS = 4
 private const val SHEET_ROWS = 6
 
 private data class SheetDirectionPose(
   val row: Int,
   val flipX: Boolean,
   val startCol: Int = 0,
-  val frameCount: Int = 5,
+  val frameCount: Int = 4,
 )
 
-private fun directionPoseForTangent(tx: Float, ty: Float): SheetDirectionPose {
+private fun directionPoseForTangent(tx: Float, ty: Float, sheetCols: Int = SHEET_COLS): SheetDirectionPose {
   val angleDeg = (atan2(ty.toDouble(), tx.toDouble()) * 180.0 / PI).toFloat()
+  val count = sheetCols.coerceIn(1, 4)
   return when {
-    angleDeg in -22.5f..22.5f -> SheetDirectionPose(row = 1, flipX = false, startCol = 0, frameCount = 5)   // RIGHT
-    angleDeg in 22.5f..67.5f -> SheetDirectionPose(row = 2, flipX = false, startCol = 0, frameCount = 5)    // 3/4 FRONT-RIGHT
-    angleDeg in 67.5f..112.5f -> SheetDirectionPose(row = 0, flipX = false, startCol = 2, frameCount = 8)   // FRONT / DOWN
-    angleDeg in 112.5f..157.5f -> SheetDirectionPose(row = 2, flipX = true, startCol = 0, frameCount = 5)   // 3/4 FRONT-LEFT
-    angleDeg >= 157.5f || angleDeg <= -157.5f -> SheetDirectionPose(row = 1, flipX = true, startCol = 0, frameCount = 5) // LEFT
-    angleDeg in -157.5f..-112.5f -> SheetDirectionPose(row = 2, flipX = true, startCol = 5, frameCount = 3) // 3/4 BACK-LEFT
-    angleDeg in -112.5f..-67.5f -> SheetDirectionPose(row = 4, flipX = false, startCol = 5, frameCount = 3) // BACK / UP
-    else -> SheetDirectionPose(row = 2, flipX = false, startCol = 5, frameCount = 3)                        // 3/4 BACK-RIGHT
+    angleDeg in -22.5f..22.5f -> SheetDirectionPose(row = 1, flipX = false, startCol = 0, frameCount = count)       // RIGHT
+    angleDeg in 22.5f..67.5f -> SheetDirectionPose(row = 4, flipX = false, startCol = 0, frameCount = count)        // 3/4 FRONT-RIGHT
+    angleDeg in 67.5f..112.5f -> SheetDirectionPose(row = 0, flipX = false, startCol = 0, frameCount = count)       // FRONT / DOWN
+    angleDeg in 112.5f..157.5f -> SheetDirectionPose(row = 4, flipX = true, startCol = 0, frameCount = count)       // 3/4 FRONT-LEFT
+    angleDeg >= 157.5f || angleDeg <= -157.5f -> SheetDirectionPose(row = 2, flipX = false, startCol = 0, frameCount = count) // LEFT
+    angleDeg in -157.5f..-112.5f -> SheetDirectionPose(row = 5, flipX = false, startCol = 0, frameCount = count)    // 3/4 BACK-LEFT
+    angleDeg in -112.5f..-67.5f -> SheetDirectionPose(row = 3, flipX = false, startCol = 0, frameCount = count)     // BACK / UP
+    else -> SheetDirectionPose(row = 5, flipX = true, startCol = 0, frameCount = count)                             // 3/4 BACK-RIGHT
   }
 }
 
 /**
- * Draws an animated frame from the color-matched 10x6 mascot walk sheet (derived from red_walk_sheet.png):
- * - Row 0 (cols 2..9): FRONT/DOWN
- * - Row 1 (cols 0..4): RIGHT (flipX = LEFT)
- * - Row 2 (cols 0..4): 3/4 FRONT, (cols 5..7): 3/4 BACK
- * - Row 3 (cols 4..9): JUMP arms-up cheering into bus
- * - Row 4 (cols 5..7): BACK/UP
+ * Draws an animated frame from the 4x6 matte-3D clay passenger sheet (`240x300` tight-cropped cells):
+ * - Row 0 FRONT, Row 1 RIGHT, Row 2 LEFT, Row 3 BACK, Row 4 3/4 FRONT-RIGHT, Row 5 3/4 BACK-LEFT.
  */
 fun DrawScope.drawPassengerAsset(
   sprite: ImageBitmap?,
@@ -208,49 +221,57 @@ fun DrawScope.drawPassengerAsset(
   walkPhase: Float = 0f,
   sheetRow: Int = 0,
   startCol: Int = 0,
-  frameCount: Int = SHEET_COLS,
+  frameCount: Int = 4,
+  sheetCols: Int = SHEET_COLS,
+  sheetRows: Int = SHEET_ROWS,
+  isWalking: Boolean = true,
 ) {
   if (sprite == null) {
     if (textMeasurer != null) {
-      drawMissingAssetError(textMeasurer, "Missing\n${color.assetKey}_walk_sheet", center, fontSizeSp = 7f)
+      drawMissingAssetError(textMeasurer, "Missing\nclay_${color.assetKey}", center, fontSizeSp = 7f)
     }
     return
   }
 
-  val cellW = sprite.width / SHEET_COLS
-  val cellH = sprite.height / SHEET_ROWS
-  val safeRow = sheetRow.coerceIn(0, SHEET_ROWS - 1)
-  val safeCount = frameCount.coerceIn(1, SHEET_COLS)
-  val localFrame = (((walkPhase % safeCount) + safeCount) % safeCount).toInt().coerceIn(0, safeCount - 1)
-  val frameCol = (startCol + localFrame).coerceIn(0, SHEET_COLS - 1)
+  val cols = sheetCols.coerceAtLeast(1)
+  val rows = sheetRows.coerceAtLeast(1)
+  val cellW = sprite.width / cols
+  val cellH = sprite.height / rows
+  val safeRow = sheetRow.coerceIn(0, rows - 1)
+  val safeCount = frameCount.coerceIn(1, cols)
+  val localFrame =
+    if (isWalking) (((walkPhase % safeCount) + safeCount) % safeCount).toInt().coerceIn(0, safeCount - 1)
+    else 0
+  val frameCol = (startCol + localFrame).coerceIn(0, cols - 1)
 
-  val drawW = laneColumnWidthPx * 1.48f * uniformScale
+  // laneColumnWidthPx = passengerWidthDp = 1.12 * colStepDp -> * 1.86f = 2.083 * colStepDp (plump wall-to-wall fit)
+  val drawW = laneColumnWidthPx * 1.86f * uniformScale
   val drawH = drawW * (cellH.toFloat() / cellW.toFloat())
-  val stepWave = abs(sin((walkPhase * PI / 2.5))).toFloat()
-  val walkBob = -stepWave * drawH * 0.06f
-  val animBounceY = bounceScaleY * (0.97f + 0.06f * stepWave)
+  val stepWave = if (isWalking) abs(sin((walkPhase * PI / 2.0))).toFloat() else 0f
+  val walkBob = if (isWalking) -stepWave * drawH * 0.025f else 0f
+  val animBounceY = if (isWalking) bounceScaleY * (0.988f + 0.024f * stepWave) else bounceScaleY
 
-  // Soft ground shadow directly beneath the feet
+  // Soft ground shadow directly beneath feet
   drawOval(
-    color = Color.Black.copy(alpha = 0.24f * alpha),
-    topLeft = Offset(center.x - drawW * 0.30f, center.y + drawH * 0.35f),
-    size = Size(drawW * 0.60f, drawH * 0.12f),
+    color = Color.Black.copy(alpha = 0.20f * alpha),
+    topLeft = Offset(center.x - drawW * 0.22f, center.y + drawH * 0.21f),
+    size = Size(drawW * 0.44f, drawH * 0.08f),
   )
 
   withTransform({
     translate(center.x, center.y + walkBob)
-    if (leanDeg != 0f) rotate(degrees = leanDeg, pivot = Offset(0f, drawH * 0.35f))
+    if (leanDeg != 0f) rotate(degrees = leanDeg, pivot = Offset(0f, drawH * 0.24f))
     scale(
       scaleX = if (flipHorizontal) -1f else 1f,
       scaleY = animBounceY,
-      pivot = Offset(0f, drawH * 0.38f),
+      pivot = Offset(0f, drawH * 0.25f),
     )
   }) {
     drawImage(
       image = sprite,
       srcOffset = IntOffset(frameCol * cellW, safeRow * cellH),
       srcSize = IntSize(cellW, cellH),
-      dstOffset = IntOffset((-drawW * 0.5f).roundToInt(), (-drawH * 0.5f).roundToInt()),
+      dstOffset = IntOffset((-drawW * 0.5f).roundToInt(), (-drawH * 0.72f).roundToInt()),
       dstSize = IntSize(drawW.roundToInt().coerceAtLeast(1), drawH.roundToInt().coerceAtLeast(1)),
       alpha = alpha,
     )
@@ -332,12 +353,13 @@ fun ConveyorTrackView(
           .toList()
 
       for (item in positioned) {
-        val pose = directionPoseForTangent(item.sample.tx, item.sample.ty)
+        val (sheetCols, sheetRows) = assets.getPassengerGrid(item.p.color)
+        val pose = directionPoseForTangent(item.sample.tx, item.sample.ty, sheetCols)
         val localScale = laneGeom.passengerScale(item.p.segment, item.p.distDp)
-        val walkFrameFloat = conveyorOffsetPx * 0.27f + item.p.rowGroupId * 0.95f + (item.p.colInRow % 2) * 1.5f
+        val walkFrameFloat = conveyorOffsetPx * 0.28f + item.p.rowGroupId * 0.9f + (item.p.colInRow % 2) * 1.5f
         val spokeAngleDeg =
-          if (item.p.segment == ConveyorSegment.RING) item.sample.tx * 2.5f
-          else item.sample.tx * 1.5f
+          if (item.p.segment == ConveyorSegment.RING) item.sample.tx * 1.8f
+          else item.sample.tx * 1.0f
 
         drawPassengerAsset(
           sprite = assets.getPassengerSprite(item.p.color),
@@ -350,10 +372,13 @@ fun ConveyorTrackView(
           leanDeg = spokeAngleDeg,
           flipHorizontal = pose.flipX,
           cropTopFraction = 1.0f,
-          walkPhase = walkFrameFloat,
+          walkPhase = if (item.p.isWalking) walkFrameFloat else 0f,
           sheetRow = pose.row,
-          startCol = pose.startCol,
-          frameCount = pose.frameCount,
+          startCol = if (item.p.isWalking) pose.startCol else 0,
+          frameCount = if (item.p.isWalking) pose.frameCount else 1,
+          sheetCols = sheetCols,
+          sheetRows = sheetRows,
+          isWalking = item.p.isWalking,
         )
       }
     }
@@ -402,6 +427,7 @@ private fun DrawScope.drawBushCluster(center: Offset, radius: Float) {
 fun WaitingSlotsRow(
   slots: List<WaitingSlotState>,
   vehicles: List<VehicleEntity>,
+  jumpingPassengers: List<JumpingPassenger> = emptyList(),
   onSlotTap: (Int) -> Unit,
   modifier: Modifier = Modifier,
 ) {
@@ -413,11 +439,16 @@ fun WaitingSlotsRow(
     val h = maxHeight
     val bayWidth = (w * 0.095f).coerceAtLeast(36.dp)
     val bayHeight = (h * 0.066f).coerceAtLeast(58.dp)
+    val closeFraction = 0.20f / 0.90f
 
     for (slot in slots) {
       val occupant = slot.occupantVehicleId?.let { id -> vehicles.firstOrNull { it.id == id } }
       val cx = w * slotCenterXNorm(slot.index)
       val cy = h * SLOT_CENTER_Y_NORM
+      val showOccupant =
+        occupant != null &&
+          (occupant.stage == VehicleStage.PARKED ||
+            (occupant.stage == VehicleStage.DEPARTING_FULL && occupant.animProgress < closeFraction))
 
       Box(
         modifier =
@@ -436,6 +467,32 @@ fun WaitingSlotsRow(
             contentScale = ContentScale.Fit,
             modifier = Modifier.fillMaxSize(),
           )
+        } else if (slot.kind == SlotKind.LOCKED && !slot.unlocked && slot.index in 1..4) {
+          // Visual lock + badge when higher levels start with fewer free bays
+          Canvas(modifier = Modifier.fillMaxSize()) {
+            rotate(SLOT_TILT_DEG, pivot = Offset(size.width * 0.5f, size.height * 0.5f)) {
+              drawRoundRect(
+                color = Color(0xCC242D46),
+                topLeft = Offset(size.width * 0.08f, size.height * 0.08f),
+                size = Size(size.width * 0.84f, size.height * 0.84f),
+                cornerRadius = CornerRadius(6.dp.toPx()),
+              )
+              val plusR = min(size.width, size.height) * 0.19f
+              val c = Offset(size.width * 0.5f, size.height * 0.5f)
+              drawLine(
+                color = Color(0xFF4ADE80),
+                start = Offset(c.x - plusR, c.y),
+                end = Offset(c.x + plusR, c.y),
+                strokeWidth = 3.2.dp.toPx(),
+              )
+              drawLine(
+                color = Color(0xFF4ADE80),
+                start = Offset(c.x, c.y - plusR),
+                end = Offset(c.x, c.y + plusR),
+                strokeWidth = 3.2.dp.toPx(),
+              )
+            }
+          }
         } else if (slot.kind == SlotKind.VIP && slot.unlocked && occupant == null) {
           Box(
             modifier =
@@ -453,10 +510,11 @@ fun WaitingSlotsRow(
           }
         }
 
-        if (occupant != null && occupant.stage == VehicleStage.PARKED) {
+        if (showOccupant && occupant != null) {
           val arriveScale = occupant.squashFactor
           val topUpSprite = assets.getWaitingBayBusSprite(occupant.color)
           val passengerSprite = assets.getPassengerSprite(occupant.color)
+          val inFlightCount = jumpingPassengers.count { it.targetVehicleId == occupant.id }
 
           Canvas(modifier = Modifier.fillMaxSize()) {
             val center = Offset(size.width * 0.5f, size.height * 0.5f)
@@ -468,13 +526,8 @@ fun WaitingSlotsRow(
                 fontSizeSp = 7f,
               )
             } else {
-              val maxW = size.width * 1.02f
-              val maxH = size.height * 0.98f
-              val baseScale = min(maxW / topUpSprite.width.toFloat(), maxH / topUpSprite.height.toFloat())
-              val scaleFactor = baseScale * arriveScale
-              val openExpand = 1f + 0.22f * occupant.roofOpenProgress.coerceIn(0f, 1f)
-              val drawW = (topUpSprite.width * scaleFactor * openExpand).coerceAtMost(size.width * 0.96f)
-              val drawH = topUpSprite.height * scaleFactor
+              val drawW = (size.width * 0.90f * arriveScale).coerceAtLeast(1f)
+              val drawH = (size.height * 0.94f * arriveScale).coerceAtLeast(1f)
 
               withTransform({
                 translate(center.x, center.y)
@@ -486,6 +539,7 @@ fun WaitingSlotsRow(
                   vehicle = occupant,
                   drawW = drawW,
                   drawH = drawH,
+                  inFlightTowardRoof = inFlightCount,
                 )
               }
             }
@@ -493,7 +547,7 @@ fun WaitingSlotsRow(
         }
       }
 
-      if (occupant != null && occupant.stage == VehicleStage.PARKED) {
+      if (showOccupant && occupant != null) {
         val remaining = (occupant.capacity - occupant.boardedCount).coerceAtLeast(0)
         val progress = (occupant.boardedCount.toFloat() / occupant.capacity.coerceAtLeast(1)).coerceIn(0f, 1f)
 
@@ -579,15 +633,16 @@ fun ParkingLotCanvas(
           .testTag("parking_lot_canvas")
           .pointerInput(gridCols, gridRows) {
             detectTapGestures { offset ->
-              val m = computeLotMetrics(size.width.toFloat(), size.height.toFloat(), gridCols, gridRows)
+              val m = computeLotMetrics(size.width.toFloat(), size.height.toFloat(), gridCols, gridRows, density)
               val gx = (offset.x - m.originX) / m.stride
               val gy = (offset.y - m.originY) / m.stride
               onLotTap(gx, gy)
             }
           },
     ) {
-      val m = computeLotMetrics(size.width, size.height, gridCols, gridRows)
+      val m = computeLotMetrics(size.width, size.height, gridCols, gridRows, density)
       val stride = m.stride
+      val gapPx = m.gapPx
       val cellBoxPx = m.cellBoxPx
       val originX = m.originX
       val originY = m.originY
@@ -624,13 +679,14 @@ fun ParkingLotCanvas(
           textMeasurer = textMeasurer,
           v = v,
           center = Offset(cx, cy),
-          cellBoxPx = cellBoxPx,
+          stridePx = stride,
+          gapPx = gapPx,
         )
 
         if (tutorialVehicleId == v.id && (v.stage == VehicleStage.IN_LOT || v.stage == VehicleStage.INTRO_SLIDING)) {
           drawCircle(
             color = GoldCoin.copy(alpha = 0.7f - 0.4f * handBob),
-            radius = cellBoxPx * (0.50f + 0.14f * handBob),
+            radius = cellBoxPx * (0.65f + 0.14f * handBob),
             center = Offset(cx, cy),
             style = Stroke(width = 3.5.dp.toPx()),
           )
@@ -697,12 +753,15 @@ private fun DrawScope.drawTunnelPortal(
   )
 }
 
-private fun seatColsForCapacity(capacity: Int): Int = if (capacity <= 8) 2 else 4
+private const val SEAT_COLS = 3
+private const val SEAT_ROWS = 14
 
 /**
- * Draws the convertible open-top car shell centered at (0,0) inside the current Canvas transform.
- * As [vehicle.roofOpenProgress] goes 0->1, the roof panel slides open to reveal 4-column rows of seats
- * (supporting up to 40 seated passengers cleanly!) with large, plump 3D passenger heads.
+ * Draws the open-top bus body centered at (0,0) inside the current Canvas transform:
+ * - Opening grows from center in 0.25s up to 80% of bus width x 82% of bus length.
+ * - Rim in the bus's LIGHT shade, interior filled with the bus's MAIN color (never black/navy).
+ * - 14 rows x 3 seats (42 positions, last 2 stay empty) in the bus's DARK shade at 45% opacity.
+ * - Boarded passenger heads fill front-to-back, left-to-right: LIGHT shade fill, thin DARK outline, white shine dot.
  */
 private fun DrawScope.drawOpenTopBusBody(
   topSprite: ImageBitmap,
@@ -710,6 +769,7 @@ private fun DrawScope.drawOpenTopBusBody(
   vehicle: VehicleEntity,
   drawW: Float,
   drawH: Float,
+  inFlightTowardRoof: Int = 0,
 ) {
   drawOval(
     color = Color.Black.copy(alpha = 0.26f),
@@ -723,205 +783,120 @@ private fun DrawScope.drawOpenTopBusBody(
   )
 
   val open = vehicle.roofOpenProgress.coerceIn(0f, 1f)
-  if (open <= 0.02f) return
+  if (open <= 0.01f) return
 
-  // Wide open cabin behind windshield and inside side body rails
-  val cabinW = drawW * 0.86f
-  val cabinH = drawH * 0.78f
-  val cabinLeft = -cabinW * 0.5f
-  val cabinTop = -drawH * 0.37f
-  val curCabinH = cabinH * open
+  // Opening covers ~80% of bus width and ~82% of bus length, growing outward from center
+  val fullOpenW = drawW * 0.80f
+  val fullOpenH = drawH * 0.82f
+  val openCenterY = drawH * 0.03f
+  val fullTop = openCenterY - fullOpenH * 0.5f
 
-  // Recessed interior cabin floor
+  val curW = (fullOpenW * open).coerceAtLeast(2f)
+  val curH = (fullOpenH * open).coerceAtLeast(2f)
+  val curLeft = -curW * 0.5f
+  val curTop = openCenterY - curH * 0.5f
+  val cornerRadius = CornerRadius(min(curW, fullOpenW) * 0.16f)
+
+  // Inside filled with MAIN color of the bus (never black, grey, or dark navy)
   drawRoundRect(
-    color = Color(0xFF1E2538),
-    topLeft = Offset(cabinLeft, cabinTop),
-    size = Size(cabinW, curCabinH),
-    cornerRadius = CornerRadius(drawW * 0.12f),
-  )
-  drawRoundRect(
-    color = vehicle.color.shade,
-    topLeft = Offset(cabinLeft, cabinTop),
-    size = Size(cabinW, curCabinH),
-    cornerRadius = CornerRadius(drawW * 0.12f),
-    style = Stroke(width = 1.4.dp.toPx()),
+    color = vehicle.color.roofMain,
+    topLeft = Offset(curLeft, curTop),
+    size = Size(curW, curH),
+    cornerRadius = cornerRadius,
   )
 
-  // Draw neat 4-column rows of seats inside the open cabin (up to 4x10 = 40 seats),
-  // filling strictly from front row (row 0) backward in two passes so seated passengers overlap cleanly.
-  if (open > 0.25f) {
-    val seatCols = seatColsForCapacity(vehicle.capacity)
-    val seatRows = ((vehicle.capacity + seatCols - 1) / seatCols).coerceAtLeast(2)
-    val padX = cabinW * 0.03f
-    val padY = cabinH * 0.03f
-    val cellW = (cabinW - padX * 2f) / seatCols
-    val cellH = (cabinH - padY * 2f) / seatRows
-    val boarded = vehicle.boardedCount.coerceIn(0, vehicle.capacity)
-    val seatW = min(cellW * 0.82f, cellH * 0.92f)
-    val seatH = min(cellW * 0.72f, cellH * 0.82f)
-    val headR = min(cellW * 0.48f, cellH * 0.84f).coerceAtLeast(2.6.dp.toPx())
+  // 14 rows x 3 seats (23 x 54 reference proportions: col x = -5.2, 0, +5.2; row pitch 2.85 starting 3.4 from top)
+  val ux = fullOpenW / 18.4f
+  val uy = fullOpenH / 44.28f
+  val unit = min(ux, uy)
 
-    // Pass 1: Draw all empty seat cushions first so rear cushions never overlap front passengers
-    for (r in 0 until seatRows) {
-      val rowTop = cabinTop + padY + r * cellH
-      if (rowTop + cellH * 0.4f > cabinTop + curCabinH) break
-      for (c in 0 until seatCols) {
-        val seatIdx = r * seatCols + c
-        if (seatIdx >= vehicle.capacity) break
-        val cx = cabinLeft + padX + (c + 0.5f) * cellW
-        val cy = rowTop + cellH * 0.5f
+  if (open > 0.12f) {
+    val seatColor = vehicle.color.roofDark.copy(alpha = 0.45f)
+    val seatW = 3.8f * ux
+    val seatH = 2.15f * uy
+    val seatCorner = CornerRadius(seatW * 0.35f)
+    val headR = 2.3f * unit
+    val outlineStrokeW = (0.65f * unit).coerceAtLeast(0.55.dp.toPx())
+    val shineR = (headR * 0.32f).coerceAtLeast(0.75f)
 
-        drawRoundRect(
-          color = Color(0xFF2B354E),
-          topLeft = Offset(cx - seatW * 0.5f, cy - seatH * 0.46f),
-          size = Size(seatW, seatH),
-          cornerRadius = CornerRadius(seatW * 0.30f),
-        )
-      }
-    }
-
-    // Pass 2: Draw large chubby seated passengers row-by-row (front-to-back 2.5D overlap)
-    val isWhiteBus = vehicle.color == VehicleColor.WHITE
-    val shoulderColor =
-      if (isWhiteBus) Color(0xFFCBD5E1)
-      else lerp(vehicle.color.fill, vehicle.color.shade, 0.55f)
-    val headOutline =
-      if (isWhiteBus) Color(0xFF334155)
-      else lerp(vehicle.color.shade, Color(0xFF0B1020), 0.45f)
-    val headColors =
-      if (isWhiteBus) {
-        listOf(Color.White, Color(0xFFF3F6FA), Color(0xFFCBD5E1))
+    // Visible boarded heads = 40 - remaining - inFlight (matches exact landed count in bus)
+    val remainingToLand = (vehicle.capacity - vehicle.boardedCount).coerceAtLeast(0)
+    val effectiveRemaining = (vehicle.capacity - vehicle.reservedCount).coerceAtLeast(0)
+    val visibleHeads =
+      if (inFlightTowardRoof > 0) {
+        (vehicle.capacity - effectiveRemaining - inFlightTowardRoof).coerceIn(0, vehicle.capacity)
       } else {
-        listOf(Color.White, vehicle.color.highlight, vehicle.color.fill, vehicle.color.shade)
+        (vehicle.capacity - remainingToLand).coerceIn(0, vehicle.capacity)
       }
-    val outlinePx = 0.95.dp.toPx()
 
-    for (r in 0 until seatRows) {
-      val rowTop = cabinTop + padY + r * cellH
-      if (rowTop + cellH * 0.4f > cabinTop + curCabinH) break
-      for (c in 0 until seatCols) {
-        val seatIdx = r * seatCols + c
-        if (seatIdx >= boarded) break
-        val cx = cabinLeft + padX + (c + 0.5f) * cellW
-        val cy = rowTop + cellH * 0.5f
-        val headCenter = Offset(cx, cy - headR * 0.10f)
-
-        // Subtle seat drop shadow so overlapping chubby heads stay separated
-        drawCircle(
-          color = Color.Black.copy(alpha = 0.28f),
-          radius = headR * 1.04f,
-          center = Offset(cx, headCenter.y + headR * 0.18f),
-        )
-
-        // Plump shoulders tucked into the seat
-        drawOval(
-          color = shoulderColor,
-          topLeft = Offset(cx - headR * 1.12f, cy - headR * 0.08f),
-          size = Size(headR * 2.24f, headR * 1.20f),
-        )
-        drawOval(
-          color = headOutline,
-          topLeft = Offset(cx - headR * 1.12f, cy - headR * 0.08f),
-          size = Size(headR * 2.24f, headR * 1.20f),
-          style = Stroke(width = outlinePx * 0.8f),
-        )
-
-        // Large glossy 3D passenger head clearly visible from above
-        val headBrush =
-          Brush.radialGradient(
-            colors = headColors,
-            center = Offset(cx - headR * 0.28f, headCenter.y - headR * 0.28f),
-            radius = headR * 1.45f,
+    clipRect(
+      left = curLeft + 1f,
+      top = curTop + 1f,
+      right = curLeft + curW - 1f,
+      bottom = curTop + curH - 1f,
+    ) {
+      // Empty seats in DARK shade at 45% opacity across 14 rows x 3 seats (42 positions)
+      for (r in 0 until SEAT_ROWS) {
+        val sy = fullTop + (3.4f + r * 2.85f) * uy
+        for (c in 0 until SEAT_COLS) {
+          val sx = (c - 1) * 5.2f * ux
+          drawRoundRect(
+            color = seatColor,
+            topLeft = Offset(sx - seatW * 0.5f, sy - seatH * 0.5f),
+            size = Size(seatW, seatH),
+            cornerRadius = seatCorner,
           )
-        drawCircle(brush = headBrush, radius = headR, center = headCenter)
+        }
+      }
+
+      // Seated matte-3D clay passenger heads row by row from front (top) to back (bottom), left to right
+      for (seatIdx in 0 until visibleHeads.coerceAtMost(40)) {
+        val r = seatIdx / SEAT_COLS
+        val c = seatIdx % SEAT_COLS
+        val sx = (c - 1) * 5.2f * ux
+        val sy = fullTop + (3.4f + r * 2.85f) * uy
+        val center = Offset(sx, sy)
+
         drawCircle(
-          color = headOutline,
+          color = vehicle.color.roofLight,
           radius = headR,
-          center = headCenter,
-          style = Stroke(width = outlinePx),
+          center = center,
         )
         drawCircle(
-          color = Color.White.copy(alpha = 0.62f),
-          radius = headR * 0.32f,
-          center = Offset(cx - headR * 0.30f, headCenter.y - headR * 0.32f),
+          color = vehicle.color.roofDark.copy(alpha = 0.55f),
+          radius = headR,
+          center = center,
+          style = Stroke(width = outlineStrokeW),
+        )
+        drawCircle(
+          color = Color.White.copy(alpha = 0.72f),
+          radius = shineR,
+          center = Offset(sx - headR * 0.28f, sy - headR * 0.30f),
         )
       }
     }
   }
 
-  // Sunroof slide guide rails along cabin edges when open
-  val railW = 1.6.dp.toPx()
-  drawRect(
-    color = Color(0xFFCBD5E1).copy(alpha = 0.72f * open),
-    topLeft = Offset(cabinLeft + 1.dp.toPx(), cabinTop + 2.dp.toPx()),
-    size = Size(railW, curCabinH.coerceAtLeast(2f)),
+  // Rim in the LIGHT shade of the bus color
+  drawRoundRect(
+    color = vehicle.color.roofLight,
+    topLeft = Offset(curLeft, curTop),
+    size = Size(curW, curH),
+    cornerRadius = cornerRadius,
+    style = Stroke(width = (1.6f * unit).coerceAtLeast(1.3.dp.toPx())),
   )
-  drawRect(
-    color = Color(0xFFCBD5E1).copy(alpha = 0.72f * open),
-    topLeft = Offset(cabinLeft + cabinW - railW - 1.dp.toPx(), cabinTop + 2.dp.toPx()),
-    size = Size(railW, curCabinH.coerceAtLeast(2f)),
-  )
-
-  // Sliding glass sunroof hatch retracting toward rear while opening/closing
-  if (open < 0.98f) {
-    val lidH = (cabinH * (1f - open)).coerceAtLeast(2.dp.toPx())
-    val lidTop = cabinTop + curCabinH
-    val lidRadius = CornerRadius(drawW * 0.09f)
-    // Painted outer sunroof frame
-    drawRoundRect(
-      color = vehicle.color.fill,
-      topLeft = Offset(cabinLeft, lidTop),
-      size = Size(cabinW, lidH),
-      cornerRadius = lidRadius,
-    )
-    drawRoundRect(
-      color = OutlineInk,
-      topLeft = Offset(cabinLeft, lidTop),
-      size = Size(cabinW, lidH),
-      cornerRadius = lidRadius,
-      style = Stroke(width = 1.1.dp.toPx()),
-    )
-    // Tinted glossy dual glass hatch panes inside the painted frame
-    val glassInsetX = drawW * 0.07f
-    val glassInsetY = (lidH * 0.14f).coerceAtLeast(1.dp.toPx())
-    val glassW = (cabinW - glassInsetX * 2f).coerceAtLeast(1f)
-    val glassH = (lidH - glassInsetY * 2f).coerceAtLeast(1f)
-    if (glassH > 2.dp.toPx()) {
-      drawRoundRect(
-        color = Color(0xFF15294A),
-        topLeft = Offset(cabinLeft + glassInsetX, lidTop + glassInsetY),
-        size = Size(glassW, glassH),
-        cornerRadius = CornerRadius(drawW * 0.05f),
-      )
-      // Specular glass highlight sheen across hatch
-      drawRoundRect(
-        color = Color(0xFF7DD3FC).copy(alpha = 0.42f),
-        topLeft = Offset(cabinLeft + glassInsetX + 1.dp.toPx(), lidTop + glassInsetY + 1.dp.toPx()),
-        size = Size((glassW * 0.45f).coerceAtLeast(1f), (glassH * 0.45f).coerceAtLeast(1f)),
-        cornerRadius = CornerRadius(drawW * 0.04f),
-      )
-      // Center glass divider / latch bar
-      drawLine(
-        color = vehicle.color.shade,
-        start = Offset(cabinLeft + glassInsetX, lidTop + lidH * 0.5f),
-        end = Offset(cabinLeft + glassInsetX + glassW, lidTop + lidH * 0.5f),
-        strokeWidth = 1.dp.toPx(),
-      )
-    }
-  }
 }
 
 /**
- * Draws a vehicle using the exact Image 2 minibus sprites:
- * - Horizontal lot cars (LEFT / RIGHT) use bus_<color>_horiz.png (flipped if RIGHT) for the 3/4 side look from Image 3.
- * - Vertical or rotating cars use bus_<color>_top_front.png rotated cleanly to direction / path tangent.
+ * Draws a 1x2 (vertical) or 2x1 (horizontal) straight lattice bus with 4-6px neighbor gaps.
  */
 private fun DrawScope.drawLotVehicleSprite(
   assets: AssetManager,
   textMeasurer: TextMeasurer,
   v: VehicleEntity,
   center: Offset,
-  cellBoxPx: Float,
+  stridePx: Float,
+  gapPx: Float,
   angleOverrideDeg: Float? = null,
 ) {
   val isStaticHorizontal =
@@ -929,8 +904,8 @@ private fun DrawScope.drawLotVehicleSprite(
   if (isStaticHorizontal) {
     val horizSprite = assets.getBusSprite(v.color, BusView.HORIZ)
     if (horizSprite != null) {
-      val maxW = cellBoxPx * 0.98f
-      val maxH = cellBoxPx * 0.54f
+      val maxW = (stridePx * 2f - gapPx).coerceAtLeast(1f)
+      val maxH = (stridePx - gapPx).coerceAtLeast(1f)
       val baseScale = min(maxW / horizSprite.width.toFloat(), maxH / horizSprite.height.toFloat())
       val uniformScale = baseScale * v.squashFactor
       val drawW = horizSprite.width * uniformScale
@@ -943,7 +918,7 @@ private fun DrawScope.drawLotVehicleSprite(
       }) {
         drawOval(
           color = Color.Black.copy(alpha = 0.22f),
-          topLeft = Offset(-drawW * 0.46f, -drawH * 0.36f + 2.5.dp.toPx()),
+          topLeft = Offset(-drawW * 0.46f, -drawH * 0.36f + 2.dp.toPx()),
           size = Size(drawW * 0.92f, drawH * 0.84f),
         )
         drawImage(
@@ -964,11 +939,19 @@ private fun DrawScope.drawLotVehicleSprite(
     }
   }
 
-  val topSprite = assets.getBusSprite(v.color, BusView.TOP_FRONT)
+  val isMovingDown =
+    if (angleOverrideDeg != null) {
+      val normAngle = ((angleOverrideDeg % 360f) + 360f) % 360f
+      normAngle in 45f..135f
+    } else {
+      v.direction == Direction.DOWN
+    }
+  val topView = if (isMovingDown) BusView.TOP_FRONT else BusView.TOP_REAR
+  val topSprite = assets.getBusSprite(v.color, topView) ?: assets.getBusSprite(v.color, BusView.TOP_FRONT)
   if (topSprite == null) {
     drawMissingAssetError(
       textMeasurer = textMeasurer,
-      message = "Missing\ngreen_bus_top_front",
+      message = "Missing\nbus_${v.color.assetKey}",
       center = center,
       fontSizeSp = 8f,
     )
@@ -976,13 +959,18 @@ private fun DrawScope.drawLotVehicleSprite(
   }
 
   val baseAngleDeg = angleOverrideDeg ?: v.direction.angleDeg
-  val rotationDeg = baseAngleDeg + 90f
-  val maxShortPx = cellBoxPx * 0.54f
-  val maxLongPx = cellBoxPx * 0.96f
-  val baseScale = min(maxShortPx / topSprite.width.toFloat(), maxLongPx / topSprite.height.toFloat())
-  val uniformScale = baseScale * v.squashFactor
-  val drawW = topSprite.width * uniformScale
-  val drawH = topSprite.height * uniformScale
+  val rotationDeg =
+    if (angleOverrideDeg == null && (v.direction == Direction.UP || v.direction == Direction.DOWN)) {
+      0f
+    } else if (isMovingDown) {
+      baseAngleDeg - 90f
+    } else {
+      baseAngleDeg + 90f
+    }
+  val maxShortPx = (stridePx - gapPx).coerceAtLeast(1f)
+  val maxLongPx = (stridePx * 2f - gapPx).coerceAtLeast(1f)
+  val drawW = maxShortPx * 0.96f * v.squashFactor
+  val drawH = min(maxLongPx * 0.94f, maxShortPx * 1.78f) * v.squashFactor
   val flashRed = v.flashRedTimer > 0f
   val passengerSprite = assets.getPassengerSprite(v.color)
 
@@ -1132,11 +1120,11 @@ fun PlayfieldEffectsOverlay(
     val w = size.width
     val h = size.height
 
-    val lotTop = h * 0.422f
-    val lotH = h * 0.455f
-    val m = computeLotMetrics(w, lotH, gridCols, gridRows)
+    val lotTop = h * 0.398f
+    val lotH = h * 0.475f
+    val m = computeLotMetrics(w, lotH, gridCols, gridRows, density)
     val stride = m.stride
-    val cellBoxPx = m.cellBoxPx
+    val gapPx = m.gapPx
     val originX = m.originX
     val originY = lotTop + m.originY
 
@@ -1144,9 +1132,9 @@ fun PlayfieldEffectsOverlay(
     val gridRightX = originX + gridCols * stride
     val gridBotY = originY + gridRows * stride
 
-    val entryLaneY = h * 0.4025f
-    val rightGapY = h * 0.4025f
-    val exitMargin = stride * 0.62f
+    val entryLaneY = h * 0.382f
+    val rightGapY = h * 0.395f
+    val exitMargin = stride * 0.85f
     val leftRoadX = (gridLeftX - exitMargin).coerceAtLeast(w * 0.055f)
     val rightRoadX = (gridRightX + exitMargin).coerceAtMost(w * 0.945f)
     val botRoadY = (gridBotY + exitMargin).coerceAtMost(h * 0.885f)
@@ -1154,10 +1142,14 @@ fun PlayfieldEffectsOverlay(
 
     val bayW = maxOf(w * 0.095f, 36.dp.toPx())
     val bayH = maxOf(h * 0.066f, 58.dp.toPx())
+    val closeFraction = 0.20f / 0.90f
 
     for (v in vehicles) {
       if (v.stage == VehicleStage.DEPARTING_FULL && v.slotIndex >= 0) {
-        val p = v.animProgress.coerceIn(0f, 1f)
+        val rawDepartP = v.animProgress.coerceIn(0f, 1f)
+        // WaitingSlotsRow draws the bus while its roof closes during the first 0.20s
+        if (rawDepartP < closeFraction) continue
+        val p = ((rawDepartP - closeFraction) / (1f - closeFraction)).coerceIn(0f, 1f)
         val slotCx = slotCenterXNorm(v.slotIndex) * w
         val slotCy = SLOT_CENTER_Y_NORM * h
         val exitLaneY = rightGapY
@@ -1166,32 +1158,32 @@ fun PlayfieldEffectsOverlay(
           val localT = (p / 0.28f).coerceIn(0f, 1f)
           val pullOutX = slotCx + (bayW * 0.72f) * (localT * localT)
           val pullOutY = slotCy + (exitLaneY - slotCy) * (localT * localT * (3f - 2f * localT))
-          val turnSheet = assets.getBusTurnSheet(v.color)
-          if (turnSheet != null) {
-            val turnFrame = (1f + localT * 8f).roundToInt().coerceIn(1, 9)
+          val isoSprite = assets.getBusSprite(v.color, BusView.ISO_2)
+          if (localT > 0.25f && isoSprite != null) {
             drawOval(
               color = Color.Black.copy(alpha = 0.24f),
               topLeft = Offset(pullOutX - bayW * 0.48f, pullOutY - bayH * 0.18f + 3.dp.toPx()),
               size = Size(bayW * 0.96f, bayH * 0.42f),
             )
-            drawStripFrame(
-              sheet = turnSheet,
-              frameCount = 11,
-              frameIndex = turnFrame,
+            drawSpriteUniform(
+              sprite = isoSprite,
+              missingLabel = "Missing bus_${v.color.assetKey}_iso_2",
+              textMeasurer = textMeasurer,
               center = Offset(pullOutX, pullOutY),
-              maxW = bayH * 1.12f,
-              maxH = bayH * 1.02f,
-              flipHorizontal = true,
+              maxW = bayH * 0.98f,
+              maxH = bayH * 0.96f,
+              flipHorizontal = false,
             )
           } else {
-            val angle = (-90f + SLOT_TILT_DEG) * (1f - localT) + 0f * localT
-            val slotBox = (bayH * 0.96f) / 0.94f
+            val angle = (-90f + SLOT_TILT_DEG) * (1f - localT)
+            val slotStride = (bayH * 0.96f + gapPx) * 0.5f
             drawLotVehicleSprite(
               assets = assets,
               textMeasurer = textMeasurer,
               v = v,
               center = Offset(pullOutX, pullOutY),
-              cellBoxPx = slotBox,
+              stridePx = slotStride,
+              gapPx = gapPx,
               angleOverrideDeg = angle,
             )
           }
@@ -1234,38 +1226,17 @@ fun PlayfieldEffectsOverlay(
             }
           }
 
-          val exitBlurSheet = assets.getBusExitBlurSheet(v.color)
-          if (exitBlurSheet != null) {
-            val blurFrame =
-              when {
-                blastT < 0.14f -> 0
-                blastT < 0.34f -> 1
-                blastT < 0.62f -> 2
-                else -> 3
-              }
-            drawStripFrame(
-              sheet = exitBlurSheet,
-              frameCount = 4,
-              frameIndex = blurFrame,
-              center = Offset(drawX, drawY),
-              maxW = departingLen * 1.24f,
-              maxH = departingThick * 1.18f,
-              flipHorizontal = false,
-              alpha = alpha,
-            )
-          } else {
-            val sideSprite = assets.getBusSprite(v.color, BusView.HORIZ) ?: assets.getBusSprite(v.color, BusView.SIDE)
-            drawSpriteUniform(
-              sprite = sideSprite,
-              missingLabel = "Missing bus_${v.color.assetKey}_horiz",
-              textMeasurer = textMeasurer,
-              center = Offset(drawX, drawY),
-              maxW = departingLen,
-              maxH = departingThick,
-              flipHorizontal = true,
-              alpha = alpha,
-            )
-          }
+          val sideSprite = assets.getBusSprite(v.color, BusView.SIDE) ?: assets.getBusSprite(v.color, BusView.HORIZ)
+          drawSpriteUniform(
+            sprite = sideSprite,
+            missingLabel = "Missing bus_${v.color.assetKey}_side",
+            textMeasurer = textMeasurer,
+            center = Offset(drawX, drawY),
+            maxW = departingLen * 1.24f,
+            maxH = departingThick * 1.12f,
+            flipHorizontal = true,
+            alpha = alpha,
+          )
         }
         continue
       }
@@ -1324,15 +1295,16 @@ fun PlayfieldEffectsOverlay(
         dotRadiusPx = 2.2.dp.toPx(),
       )
 
-      // Smoothly match slot dimensions & tilt (-13.5 deg) ONLY during vertical climb into the waiting bay
-      val slotTargetBox = (bayH * 0.96f) / 0.94f
+      // Smoothly match slot dimensions & tilt (-15.5 deg) during vertical climb into the waiting bay
+      val slotTargetStride = (bayH * 0.96f + gapPx) * 0.5f
       val approachT =
         if (sampled.pos.y < entryLaneY - 1.5.dp.toPx()) {
           ((entryLaneY - sampled.pos.y) / (entryLaneY - slotCy).coerceAtLeast(1f)).coerceIn(0f, 1f)
         } else {
           0f
         }
-      val curCellBox = cellBoxPx + (slotTargetBox - cellBoxPx) * approachT
+      val curStride = stride + (slotTargetStride - stride) * approachT
+      val curLongBox = curStride * 2f - gapPx
       val targetTiltAngle = -90f + SLOT_TILT_DEG
       val blendedAngle =
         if (approachT > 0f) {
@@ -1346,41 +1318,38 @@ fun PlayfieldEffectsOverlay(
       val tangDx = cos(tangRad).toFloat()
       val tangDy = sin(tangRad).toFloat()
       val absDx = abs(tangDx)
-      val exitBlurSheet = assets.getBusExitBlurSheet(v.color)
-      val turnSheet = assets.getBusTurnSheet(v.color)
+      val sideSprite = assets.getBusSprite(v.color, BusView.SIDE) ?: assets.getBusSprite(v.color, BusView.HORIZ)
+      val isoSprite = assets.getBusSprite(v.color, BusView.ISO_2)
 
-      if (approachT < 0.12f && absDx > 0.88f && abs(tangDy) < 0.35f && exitBlurSheet != null) {
-        val cruiseFrame = if (rawP in 0.14f..0.78f) 1 else 0
+      if (approachT < 0.12f && absDx > 0.84f && abs(tangDy) < 0.35f && sideSprite != null) {
         drawOval(
           color = Color.Black.copy(alpha = 0.22f),
-          topLeft = Offset(sampled.pos.x - curCellBox * 0.44f, sampled.pos.y - curCellBox * 0.18f + 2.5.dp.toPx()),
-          size = Size(curCellBox * 0.88f, curCellBox * 0.38f),
+          topLeft = Offset(sampled.pos.x - curLongBox * 0.44f, sampled.pos.y - curLongBox * 0.18f + 2.5.dp.toPx()),
+          size = Size(curLongBox * 0.88f, curLongBox * 0.38f),
         )
-        drawStripFrame(
-          sheet = exitBlurSheet,
-          frameCount = 4,
-          frameIndex = cruiseFrame,
+        drawSpriteUniform(
+          sprite = sideSprite,
+          missingLabel = "Missing bus_${v.color.assetKey}_side",
+          textMeasurer = textMeasurer,
           center = sampled.pos,
-          maxW = curCellBox * 1.06f,
-          maxH = curCellBox * 0.56f,
-          flipHorizontal = tangDx < 0f,
-        )
-      } else if (approachT < 0.12f && absDx in 0.24f..0.88f && tangDy <= 0.25f && turnSheet != null) {
-        val turnT = ((absDx - 0.24f) / 0.64f).coerceIn(0f, 1f)
-        val turnFrame = (2f + turnT * 7f).roundToInt().coerceIn(2, 9)
-        drawOval(
-          color = Color.Black.copy(alpha = 0.22f),
-          topLeft = Offset(sampled.pos.x - curCellBox * 0.38f, sampled.pos.y - curCellBox * 0.20f + 2.5.dp.toPx()),
-          size = Size(curCellBox * 0.76f, curCellBox * 0.44f),
-        )
-        drawStripFrame(
-          sheet = turnSheet,
-          frameCount = 11,
-          frameIndex = turnFrame,
-          center = sampled.pos,
-          maxW = curCellBox * 0.96f,
-          maxH = curCellBox * 0.96f,
+          maxW = curLongBox * 1.22f,
+          maxH = (curStride - gapPx) * 1.10f,
           flipHorizontal = tangDx > 0f,
+        )
+      } else if (approachT < 0.12f && absDx in 0.24f..0.84f && tangDy <= 0.25f && isoSprite != null) {
+        drawOval(
+          color = Color.Black.copy(alpha = 0.22f),
+          topLeft = Offset(sampled.pos.x - curLongBox * 0.38f, sampled.pos.y - curLongBox * 0.20f + 2.5.dp.toPx()),
+          size = Size(curLongBox * 0.76f, curLongBox * 0.44f),
+        )
+        drawSpriteUniform(
+          sprite = isoSprite,
+          missingLabel = "Missing bus_${v.color.assetKey}_iso_2",
+          textMeasurer = textMeasurer,
+          center = sampled.pos,
+          maxW = curLongBox * 0.90f,
+          maxH = curLongBox * 0.90f,
+          flipHorizontal = tangDx < 0f,
         )
       } else {
         drawLotVehicleSprite(
@@ -1388,14 +1357,15 @@ fun PlayfieldEffectsOverlay(
           textMeasurer = textMeasurer,
           v = v,
           center = sampled.pos,
-          cellBoxPx = curCellBox,
+          stridePx = curStride,
+          gapPx = gapPx,
           angleOverrideDeg = blendedAngle,
         )
       }
     }
 
-    // 2. Jumping passengers arc (0.30s) aiming cleanly into the next ordered seat from front row backward
-    val jumpColW = (w * 0.032f).coerceIn(11.dp.toPx(), 16.dp.toPx())
+    // 2. Jumping passengers arc (0.28s) aiming cleanly into the next ordered seat (14 rows x 3 seats)
+    val jumpColW = (w * 0.023f).coerceIn(8.5.dp.toPx(), 12.dp.toPx())
     val tiltRad = SLOT_TILT_DEG * (PI / 180.0)
     val cosTilt = cos(tiltRad).toFloat()
     val sinTilt = sin(tiltRad).toFloat()
@@ -1409,14 +1379,16 @@ fun PlayfieldEffectsOverlay(
       val targetBus = vehicles.firstOrNull { it.id == j.targetVehicleId }
       val inFlightOrder = jumpOrderCounter[j.targetVehicleId] ?: 0
       jumpOrderCounter[j.targetVehicleId] = inFlightOrder + 1
-      val cap = targetBus?.capacity ?: 16
-      val seatCols = seatColsForCapacity(cap)
+      val cap = targetBus?.capacity ?: 40
       val seatIdx = ((targetBus?.boardedCount ?: 0) + inFlightOrder).coerceIn(0, (cap - 1).coerceAtLeast(0))
-      val seatRows = ((cap + seatCols - 1) / seatCols).coerceAtLeast(2)
-      val seatR = seatIdx / seatCols
-      val seatC = seatIdx % seatCols
-      val localX = ((seatC - (seatCols - 1) * 0.5f) / seatCols) * (bayW * 0.72f)
-      val localY = (-0.35f + ((seatR + 0.5f) / seatRows) * 0.70f) * (bayH * 0.98f)
+      val seatR = (seatIdx / SEAT_COLS).coerceIn(0, SEAT_ROWS - 1)
+      val seatC = seatIdx % SEAT_COLS
+      val fullOpenW = (bayW * 0.90f) * 0.80f
+      val fullOpenH = (bayH * 0.94f) * 0.82f
+      val ux = fullOpenW / 18.4f
+      val uy = fullOpenH / 44.28f
+      val localX = (seatC - 1) * 5.2f * ux
+      val localY = (bayH * 0.94f * 0.03f - fullOpenH * 0.5f) + (3.4f + seatR * 2.85f) * uy
       val tx = slotCx + localX * cosTilt - localY * sinTilt
       val ty = slotCy + localX * sinTilt + localY * cosTilt
 
@@ -1424,7 +1396,9 @@ fun PlayfieldEffectsOverlay(
       val arcLift = sin(p * PI).toFloat() * 24.dp.toPx()
       val cx = sx + (tx - sx) * p
       val cy = sy + (ty - sy) * p - arcLift
-      val shrink = 1f - 0.52f * p
+      val shrink = 1f - 0.45f * p
+      val (jumpCols, jumpRows) = assets.getPassengerGrid(j.color)
+      val jumpFrameCount = jumpCols.coerceAtLeast(1)
       drawPassengerAsset(
         sprite = assets.getPassengerSprite(j.color),
         center = Offset(cx, cy),
@@ -1434,10 +1408,13 @@ fun PlayfieldEffectsOverlay(
         uniformScale = shrink,
         alpha = (1f - (p - 0.85f).coerceAtLeast(0f) / 0.15f).coerceIn(0f, 1f),
         cropTopFraction = 1f,
-        walkPhase = p * 5.99f,
-        sheetRow = 3,
-        startCol = 4,
-        frameCount = 6,
+        walkPhase = p * (jumpFrameCount - 0.01f),
+        sheetRow = 0,
+        startCol = 0,
+        frameCount = jumpFrameCount,
+        sheetCols = jumpCols,
+        sheetRows = jumpRows,
+        isWalking = true,
       )
     }
 

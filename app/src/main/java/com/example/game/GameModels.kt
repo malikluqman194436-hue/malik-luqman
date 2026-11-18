@@ -10,83 +10,113 @@ enum class VehicleColor(
   val highlight: Color,
   val shade: Color,
   val passengerFill: Color,
+  val roofLight: Color,
+  val roofMain: Color,
+  val roofDark: Color,
 ) {
   RED(
     assetKey = "red",
     label = "Red",
-    fill = Color(0xFFFF3E4D),
-    highlight = Color(0xFFFF7B86),
-    shade = Color(0xFFC82333),
-    passengerFill = Color(0xFFFF3E4D),
+    fill = Color(0xFFF21B3F),
+    highlight = Color(0xFFFF7A93),
+    shade = Color(0xFF9C0F28),
+    passengerFill = Color(0xFFFF6E94),
+    roofLight = Color(0xFFFF9DB8),
+    roofMain = Color(0xFFFF6E94),
+    roofDark = Color(0xFFC43D66),
   ),
   BLUE(
     assetKey = "blue",
     label = "Blue",
     fill = Color(0xFF1F7BFF),
-    highlight = Color(0xFF6BA7FF),
-    shade = Color(0xFF1250B8),
+    highlight = Color(0xFF8FCDFF),
+    shade = Color(0xFF0E43A8),
     passengerFill = Color(0xFF1F7BFF),
+    roofLight = Color(0xFF8FCDFF),
+    roofMain = Color(0xFF1F7BFF),
+    roofDark = Color(0xFF0E43A8),
   ),
   GREEN(
     assetKey = "green",
     label = "Green",
-    fill = Color(0xFF82D927),
-    highlight = Color(0xFFB1F55C),
-    shade = Color(0xFF4F9C10),
-    passengerFill = Color(0xFF88C64E),
+    fill = Color(0xFF5FD02A),
+    highlight = Color(0xFFC9FF86),
+    shade = Color(0xFF2B8410),
+    passengerFill = Color(0xFF5FD02A),
+    roofLight = Color(0xFFC9FF86),
+    roofMain = Color(0xFF5FD02A),
+    roofDark = Color(0xFF2B8410),
   ),
   YELLOW(
     assetKey = "yellow",
     label = "Yellow",
-    fill = Color(0xFFFFC926),
-    highlight = Color(0xFFFFE278),
-    shade = Color(0xFFD69A00),
-    passengerFill = Color(0xFFFFC926),
+    fill = Color(0xFFFFD000),
+    highlight = Color(0xFFFFF58A),
+    shade = Color(0xFFC29200),
+    passengerFill = Color(0xFFFFD000),
+    roofLight = Color(0xFFFFF58A),
+    roofMain = Color(0xFFFFD000),
+    roofDark = Color(0xFFC29200),
   ),
   PURPLE(
     assetKey = "purple",
     label = "Purple",
-    fill = Color(0xFF8C3BF2),
-    highlight = Color(0xFFB778FF),
-    shade = Color(0xFF5D1EB8),
-    passengerFill = Color(0xFF8C3BF2),
+    fill = Color(0xFF9A3CF0),
+    highlight = Color(0xFFDCA6FF),
+    shade = Color(0xFF5A19A3),
+    passengerFill = Color(0xFF9A3CF0),
+    roofLight = Color(0xFFDCA6FF),
+    roofMain = Color(0xFF9A3CF0),
+    roofDark = Color(0xFF5A19A3),
   ),
   WHITE(
     assetKey = "white",
     label = "White",
-    fill = Color(0xFFF3F6FA),
+    fill = Color(0xFFEBF0F7),
     highlight = Color(0xFFFFFFFF),
-    shade = Color(0xFFB6C0CE),
-    passengerFill = Color(0xFFF3F6FA),
+    shade = Color(0xFF8F9CB0),
+    passengerFill = Color(0xFFEBF0F7),
+    roofLight = Color(0xFFFFFFFF),
+    roofMain = Color(0xFFEBF0F7),
+    roofDark = Color(0xFF8F9CB0),
   ),
   CYAN(
     assetKey = "cyan",
     label = "Cyan",
-    fill = Color(0xFF14E0E8),
-    highlight = Color(0xFF76F6FA),
-    shade = Color(0xFF009FA8),
-    passengerFill = Color(0xFF14E0E8),
+    fill = Color(0xFF14D4E0),
+    highlight = Color(0xFF9BF9FC),
+    shade = Color(0xFF0A7D88),
+    passengerFill = Color(0xFF14D4E0),
+    roofLight = Color(0xFF9BF9FC),
+    roofMain = Color(0xFF14D4E0),
+    roofDark = Color(0xFF0A7D88),
   ),
   ORANGE(
     assetKey = "orange",
     label = "Orange",
-    fill = Color(0xFFFF7A1F),
-    highlight = Color(0xFFFFA86B),
-    shade = Color(0xFFCC4E00),
-    passengerFill = Color(0xFFFF7A1F),
+    fill = Color(0xFFFF8A00),
+    highlight = Color(0xFFFFC978),
+    shade = Color(0xFFC05200),
+    passengerFill = Color(0xFFFF8A00),
+    roofLight = Color(0xFFFFC978),
+    roofMain = Color(0xFFFF8A00),
+    roofDark = Color(0xFFC05200),
   ),
   BROWN(
     assetKey = "brown",
     label = "Brown",
     fill = Color(0xFFA46338),
-    highlight = Color(0xFFC88A5E),
-    shade = Color(0xFF75401E),
+    highlight = Color(0xFFE3A67D),
+    shade = Color(0xFF663718),
     passengerFill = Color(0xFFA46338),
+    roofLight = Color(0xFFE3A67D),
+    roofMain = Color(0xFFA46338),
+    roofDark = Color(0xFF663718),
   );
 
   companion object {
     val busColors: List<VehicleColor> =
-      listOf(PURPLE, WHITE, GREEN, CYAN, RED, BLUE, YELLOW, ORANGE)
+      listOf(BLUE, RED, PURPLE, GREEN, YELLOW, ORANGE)
   }
 }
 
@@ -149,12 +179,13 @@ data class LevelDefinition(
   val vehicles: List<VehicleSpec>,
   val tunnels: List<TunnelSpec> = emptyList(),
   val passengerSequence: List<VehicleColor>,
-  val conveyorSpeedDpPerSec: Float = 46f,
+  val conveyorSpeedDpPerSec: Float = 40f,
+  val freeSlots: Int = 4,
   val isTutorial: Boolean = false,
   val tutorialHintText: String? = null,
 )
 
-fun vehicleLengthForCapacity(capacity: Int): Float = 0.92f
+fun vehicleLengthForCapacity(@Suppress("UNUSED_PARAMETER") capacity: Int): Float = 1.84f
 
 data class VehicleEntity(
   val id: Int,
@@ -184,7 +215,7 @@ data class VehicleEntity(
     get() = vehicleLengthForCapacity(capacity)
 
   val widthInCells: Float
-    get() = 0.44f
+    get() = 0.84f
 }
 
 data class TunnelState(
@@ -218,6 +249,7 @@ data class ConveyorPassenger(
   val colInRow: Int = 0, // 0..3 strictly inside the 4-column lane
   val segment: ConveyorSegment = ConveyorSegment.RING,
   val distDp: Float = 0f,
+  val isWalking: Boolean = true,
 )
 
 data class JumpingPassenger(

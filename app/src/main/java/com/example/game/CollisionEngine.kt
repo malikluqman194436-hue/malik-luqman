@@ -286,6 +286,19 @@ object CollisionEngine {
     return false
   }
 
+  fun isGreedySolvable(
+    lotVehicles: List<VehicleEntity>,
+    gridCols: Int,
+    gridRows: Int,
+  ): Boolean {
+    val remaining = lotVehicles.toMutableList()
+    while (remaining.isNotEmpty()) {
+      val free = remaining.firstOrNull { checkPath(it, remaining, gridCols, gridRows).isClear } ?: return false
+      remaining.remove(free)
+    }
+    return true
+  }
+
   fun firstUnblockedVehicleId(
     lotVehicles: List<VehicleEntity>,
     gridCols: Int,
@@ -297,7 +310,7 @@ object CollisionEngine {
     }?.id
   }
 
-  fun pointHitsVehicle(px: Float, py: Float, v: VehicleEntity, extraPadding: Float = 0.16f): Boolean {
+  fun pointHitsVehicle(px: Float, py: Float, v: VehicleEntity, extraPadding: Float = 0.08f): Boolean {
     val dx = px - v.x
     val dy = py - v.y
     val cosA = cos(-v.direction.angleRad)
