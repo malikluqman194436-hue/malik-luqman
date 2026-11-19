@@ -25,20 +25,14 @@ enum class BusView(val key: String) {
 
 /**
  * Loads every sprite file directly from Android assets/ by exact filename:
- * - clay_blue_sheet.png, clay_pink_sheet.png, clay_purple_sheet.png (4x6 matte-3D clay passengers)
  * - bus_<color>_<view>.png (SUPERFAST bus sprites: top_front, top_rear, horiz, side, iso_1..4)
  * - bus_exhaust_puff_sheet.png / arrows_strip.png
  *
- * Extra colors outside the 3 native high-res clay colors cleanly derive from clay_blue_sheet.png.
+ * Passenger sprites are intentionally cleared until the new passenger system is specified.
  */
 class AssetManager(context: Context) {
 
   private val androidAssets = context.applicationContext.assets
-
-  private val baseBlueClayBitmap: Bitmap?
-  private val blueClaySheet: ImageBitmap?
-  private val passengerSheets = ConcurrentHashMap<VehicleColor, ImageBitmap?>()
-  private val passengerSheetGrids = ConcurrentHashMap<VehicleColor, Pair<Int, Int>>()
 
   private val busSprites = ConcurrentHashMap<Pair<VehicleColor, BusView>, ImageBitmap?>()
   private val baseGreenBusBitmaps = ConcurrentHashMap<BusView, Pair<Bitmap, IntArray>>()
@@ -46,30 +40,12 @@ class AssetManager(context: Context) {
   private val exhaustPuffSheet: ImageBitmap?
 
   private val recolorLock = Any()
-  private val baseClayPixels: IntArray? by lazy { extractPixels(baseBlueClayBitmap) }
 
   private val arrowsStrip: ImageBitmap?
   private val noAdsAnimSheet: ImageBitmap?
   private val starterPackAnimSheet: ImageBitmap?
 
   init {
-    baseBlueClayBitmap = loadArgbBitmap("clay_blue_sheet.png")
-    blueClaySheet = baseBlueClayBitmap?.asImageBitmap()
-    if (blueClaySheet != null) {
-      passengerSheets[VehicleColor.BLUE] = blueClaySheet
-      passengerSheetGrids[VehicleColor.BLUE] = 4 to 6
-    }
-
-    loadBitmap("clay_pink_sheet.png")?.let { pinkSheet ->
-      passengerSheets[VehicleColor.RED] = pinkSheet
-      passengerSheetGrids[VehicleColor.RED] = 4 to 6
-    }
-
-    loadBitmap("clay_purple_sheet.png")?.let { purpleSheet ->
-      passengerSheets[VehicleColor.PURPLE] = purpleSheet
-      passengerSheetGrids[VehicleColor.PURPLE] = 4 to 6
-    }
-
     // Preload green SUPERFAST sprites as fallback base for extra non-6 colors (white, cyan, brown)
     for (view in BusView.entries) {
       val bmp = loadArgbBitmap("bus_green_${view.key}.png")
@@ -112,37 +88,11 @@ class AssetManager(context: Context) {
     return loadArgbBitmap(fileName)?.asImageBitmap()
   }
 
-  fun getRedWalkSheet(): ImageBitmap? = getPassengerSprite(VehicleColor.RED)
+  fun getRedWalkSheet(): ImageBitmap? = null
 
-  fun getPassengerGrid(color: VehicleColor): Pair<Int, Int> {
-    passengerSheetGrids[color]?.let { return it }
-    getPassengerSprite(color)
-    return passengerSheetGrids[color] ?: (4 to 6)
-  }
+  fun getPassengerGrid(@Suppress("UNUSED_PARAMETER") color: VehicleColor): Pair<Int, Int> = 1 to 1
 
-  /**
-   * Returns a matte-3D 4x6 clay animation sprite sheet matching [color].
-   * Blue, Pink (RED slot), and Purple load directly from the high-res 4x6 sprite sheets;
-   * remaining colors cleanly derive from `clay_blue_sheet.png` keeping 3D lighting intact.
-   */
-  fun getPassengerSprite(color: VehicleColor): ImageBitmap? {
-    passengerSheets[color]?.let { return it }
-    if (color == VehicleColor.BLUE) return blueClaySheet
-
-    synchronized(recolorLock) {
-      passengerSheets[color]?.let { return it }
-
-      val srcBmp = baseBlueClayBitmap ?: return null
-      val srcPixels = baseClayPixels ?: return null
-      val recoloredPixels = recolorBlueMascotSheetPixels(srcPixels, color)
-      val outBmp = Bitmap.createBitmap(srcBmp.width, srcBmp.height, Bitmap.Config.ARGB_8888)
-      outBmp.setPixels(recoloredPixels, 0, srcBmp.width, 0, 0, srcBmp.width, srcBmp.height)
-      val outImage = outBmp.asImageBitmap()
-      passengerSheetGrids[color] = 4 to 6
-      passengerSheets[color] = outImage
-      return outImage
-    }
-  }
+  fun getPassengerSprite(@Suppress("UNUSED_PARAMETER") color: VehicleColor): ImageBitmap? = null
 
   fun getWaitingBayBusSprite(color: VehicleColor): ImageBitmap? {
     return getBusSprite(color, BusView.TOP_REAR) ?: getBusSprite(color, BusView.TOP_FRONT)

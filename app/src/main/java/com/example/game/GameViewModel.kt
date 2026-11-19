@@ -173,7 +173,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
       }
 
-    val passengers = buildInitialConveyorPassengers(levelDef.passengerSequence)
+    val passengers = emptyList<ConveyorPassenger>()
 
     val tutorialId =
       if (levelDef.isTutorial) {

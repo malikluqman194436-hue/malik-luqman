@@ -72,25 +72,13 @@ class PassengerColorRecolorTest {
   }
 
   @Test
-  fun assetManagerProvidesHighResClaySheetForEveryVehicleColor() {
+  fun assetManagerReturnsNoPassengerSpritesAfterRemoval() {
     val assets = AssetManager(ApplicationProvider.getApplicationContext())
-    val blue = assets.getPassengerSprite(VehicleColor.BLUE)
-    val pink = assets.getPassengerSprite(VehicleColor.RED)
-    val purple = assets.getPassengerSprite(VehicleColor.PURPLE)
-    assertNotNull("clay_blue_sheet.png must load", blue)
-    assertNotNull("clay_pink_sheet.png must load", pink)
-    assertNotNull("clay_purple_sheet.png must load", purple)
-
     for (color in VehicleColor.entries) {
-      val sheet = assets.getPassengerSprite(color)
-      val (cols, rows) = assets.getPassengerGrid(color)
-      assertNotNull("Passenger sprite sheet missing for $color", sheet)
-      assertEquals("Sheet width must divide evenly by $cols for $color", 0, sheet!!.width % cols)
-      assertEquals("Sheet height must divide evenly by $rows for $color", 0, sheet.height % rows)
-      assertEquals(4, cols)
-      assertEquals(6, rows)
-      assertEquals(blue!!.width, sheet.width)
-      assertEquals(blue.height, sheet.height)
+      org.junit.Assert.assertNull(
+        "Passenger sprite must be removed for $color",
+        assets.getPassengerSprite(color),
+      )
     }
   }
 
@@ -141,60 +129,19 @@ class PassengerColorRecolorTest {
   }
 
   @Test
-  fun conveyorPrefillsRingHoldsRightArmUntilLeftEmptiesAndBoardsFourAtATime() {
+  fun levelStartsWithNoPassengersAcrossGame() {
     val app = ApplicationProvider.getApplicationContext<android.app.Application>()
     val vm = com.example.game.GameViewModel(app)
     vm.updateLaneViewport(411f, 915f)
     vm.startLevel(1)
 
     val initial = vm.uiState.value
-    val ringRowsInitial = initial.passengers.filter { it.segment == com.example.game.ConveyorSegment.RING }.map { it.rowGroupId }.distinct().size
-    val leftRowsInitial = initial.passengers.filter { it.segment == com.example.game.ConveyorSegment.LEFT_ARM }.map { it.rowGroupId }.distinct().size
-    val rightRowsInitial = initial.passengers.filter { it.segment == com.example.game.ConveyorSegment.RIGHT_ARM }.map { it.rowGroupId }.distinct().size
-    val initialRightDist = initial.passengers.filter { it.segment == com.example.game.ConveyorSegment.RIGHT_ARM }.map { it.distDp }
-
-    assertTrue("Ring should start pre-filled with rows (got $ringRowsInitial)", ringRowsInitial >= 45)
-    assertTrue("Left arm should hold overflow rows (got $leftRowsInitial)", leftRowsInitial > 0)
-    assertTrue("Right arm should hold overflow rows (got $rightRowsInitial)", rightRowsInitial > 0)
-    assertTrue(
-      "Queued feeder arm rows must start standing still (not walking in place)",
-      initial.passengers.filter { it.segment != com.example.game.ConveyorSegment.RING }.none { it.isWalking },
-    )
+    assertTrue("Passengers should start empty after removal", initial.passengers.isEmpty())
+    assertTrue("Jumping passengers should start empty after removal", initial.jumpingPassengers.isEmpty())
 
     repeat(60) { vm.onFrame(0.016f) }
     val afterWait = vm.uiState.value
-    val leftRowsAfterWait = afterWait.passengers.filter { it.segment == com.example.game.ConveyorSegment.LEFT_ARM }.map { it.rowGroupId }.distinct().size
-    val rightRowsAfterWait = afterWait.passengers.filter { it.segment == com.example.game.ConveyorSegment.RIGHT_ARM }.map { it.rowGroupId }.distinct().size
-    assertEquals("LEFT_ARM must wait while RING is full", leftRowsInitial, leftRowsAfterWait)
-    assertEquals("RIGHT_ARM must wait while RING is full", rightRowsInitial, rightRowsAfterWait)
-    assertTrue(
-      "Waiting LEFT_ARM and RIGHT_ARM rows must stay in standing idle pose when ring is full",
-      afterWait.passengers.filter { it.segment != com.example.game.ConveyorSegment.RING }.none { it.isWalking },
-    )
-
-    val clearBusId = com.example.game.CollisionEngine.firstUnblockedVehicleId(afterWait.vehicles, afterWait.gridCols, afterWait.gridRows)
-    assertNotNull("Level 1 must have a clear bus", clearBusId)
-    val clearBus = afterWait.vehicles.first { it.id == clearBusId }
-    vm.onLotTap(clearBus.x, clearBus.y)
-
-    var sawBoarded = false
-    repeat(240) {
-      vm.onFrame(0.016f)
-      val cur = vm.uiState.value
-      val parked = cur.vehicles.firstOrNull { it.id == clearBusId }
-      if (parked != null && parked.reservedCount > 0) {
-        assertEquals("Uniform 4-wide rows must reserve multiples of 4 (got ${parked.reservedCount})", 0, parked.reservedCount % 4)
-        sawBoarded = true
-      }
-      val remLeft = cur.passengers.count { it.segment == com.example.game.ConveyorSegment.LEFT_ARM }
-      val rightGroup = cur.passengers.filter { it.segment == com.example.game.ConveyorSegment.RIGHT_ARM }
-      val remRight = rightGroup.map { it.rowGroupId }.distinct().size
-      if (remLeft > 0) {
-        assertEquals("RIGHT_ARM must wait until LEFT_ARM is completely empty", rightRowsInitial, remRight)
-        assertEquals("RIGHT_ARM positions must stay frozen until LEFT_ARM empties", initialRightDist, rightGroup.map { it.distDp })
-        assertTrue("RIGHT_ARM must stand still while waiting", rightGroup.none { it.isWalking })
-      }
-    }
-    assertTrue("Clear bus should park and board matching 4-passenger rows", sawBoarded)
+    assertEquals(com.example.game.GameOutcome.PLAYING, afterWait.outcome)
+    assertTrue("Passengers must remain empty", afterWait.passengers.isEmpty())
   }
 }

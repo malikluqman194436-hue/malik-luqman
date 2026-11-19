@@ -175,18 +175,11 @@ object LevelRepository {
         shiftedEntities.count { !CollisionEngine.checkPath(it, shiftedEntities, trimmedCols, trimmedRows).isClear }
       if (blockedAtStart < 4 && attempt < 90) continue
 
-      val finalSpecs =
-        if (levelNumber == 1) {
-          ensureStarterColor(shiftedSpecs, shiftedEntities, trimmedCols, trimmedRows, VehicleColor.PURPLE)
-        } else {
-          shiftedSpecs
-        }
-
       return assembleFromSpecs(
         level = levelNumber,
         cols = trimmedCols,
         rows = trimmedRows,
-        vehicles = finalSpecs,
+        vehicles = shiftedSpecs,
         conveyorSpeed = baseSpeed,
         freeSlots = freeSlots,
         isTutorial = levelNumber == 1,
@@ -200,28 +193,6 @@ object LevelRepository {
       conveyorSpeed = baseSpeed,
       freeSlots = freeSlots,
     )
-  }
-
-  private fun ensureStarterColor(
-    specs: List<VehicleSpec>,
-    entities: List<VehicleEntity>,
-    cols: Int,
-    rows: Int,
-    desiredColor: VehicleColor,
-  ): List<VehicleSpec> {
-    val clearIndices =
-      entities.indices.filter { idx ->
-        CollisionEngine.checkPath(entities[idx], entities, cols, rows).isClear
-      }
-    val firstClearIdx = clearIndices.firstOrNull() ?: return specs
-    if (specs[firstClearIdx].color == desiredColor) return specs
-    val desiredIdx = specs.indexOfFirst { it.color == desiredColor }
-    if (desiredIdx < 0) return specs
-    val mutable = specs.toMutableList()
-    val origClearColor = mutable[firstClearIdx].color
-    mutable[firstClearIdx] = mutable[firstClearIdx].copy(color = desiredColor)
-    mutable[desiredIdx] = mutable[desiredIdx].copy(color = origClearColor)
-    return mutable
   }
 
   private fun buildSafeFallbackGrid(
@@ -279,70 +250,25 @@ object LevelRepository {
     val exitOrder = computeExitOrder(vehicles, cols, rows)
     val passengerSequence = mutableListOf<VehicleColor>()
 
-    val remainingByColor = LinkedHashMap<VehicleColor, Int>()
-    for ((c, cap) in exitOrder) {
-      remainingByColor[c] = (remainingByColor[c] ?: 0) + cap
-    }
-
-    // For 3-color levels (Blue, Pink/Red, Purple), arrange the first ~52 rows (208 passengers)
-    // to fill the round ring in 3 pure blocks: Purple at bottom, Blue on left, Pink upper-right.
-    val hasTrioPalette =
-      remainingByColor.size == 3 &&
-        remainingByColor.containsKey(VehicleColor.BLUE) &&
-        remainingByColor.containsKey(VehicleColor.RED) &&
-        remainingByColor.containsKey(VehicleColor.PURPLE)
-
-    if (hasTrioPalette) {
-      fun takeColorCount(color: VehicleColor, desiredCount: Int) {
-        val avail = remainingByColor[color] ?: 0
-        val take = minOf(desiredCount, avail)
-        if (take > 0) {
-          repeat(take) { passengerSequence.add(color) }
-          remainingByColor[color] = avail - take
-        }
-      }
-      // rowIdx 0..10 (bottom & bottom-left): Purple
-      takeColorCount(VehicleColor.PURPLE, 44)
-      // rowIdx 11..29 (left side up to 12 o'clock): Blue
-      takeColorCount(VehicleColor.BLUE, 76)
-      // rowIdx 30..45 (top-right / middle section): Pink (RED)
-      takeColorCount(VehicleColor.RED, 64)
-      // rowIdx 46..51 (bottom-right meeting bottom): Purple
-      takeColorCount(VehicleColor.PURPLE, 24)
-
-      // Distribute remaining feeder-arm passengers cleanly in 16-passenger (4-row) waves
-      val waveOrder = listOf(VehicleColor.BLUE, VehicleColor.RED, VehicleColor.PURPLE)
-      while (remainingByColor.values.any { it > 0 }) {
-        for (c in waveOrder) {
-          val rem = remainingByColor[c] ?: 0
+    val remainingPerVehicle = exitOrder.toMutableList()
+    val windowSize = freeSlots.coerceIn(2, 4)
+    var cursor = 0
+    while (cursor < remainingPerVehicle.size) {
+      val windowEnd = (cursor + windowSize).coerceAtMost(remainingPerVehicle.size)
+      var anyLeftInWindow = true
+      while (anyLeftInWindow) {
+        anyLeftInWindow = false
+        for (i in cursor until windowEnd) {
+          val (color, rem) = remainingPerVehicle[i]
           if (rem > 0) {
-            val take = minOf(16, rem)
-            repeat(take) { passengerSequence.add(c) }
-            remainingByColor[c] = rem - take
+            anyLeftInWindow = true
+            val chunk = minOf(12, rem)
+            repeat(chunk) { passengerSequence.add(color) }
+            remainingPerVehicle[i] = color to (rem - chunk)
           }
         }
       }
-    } else {
-      val remainingPerVehicle = exitOrder.toMutableList()
-      val windowSize = freeSlots.coerceIn(2, 4)
-      var cursor = 0
-      while (cursor < remainingPerVehicle.size) {
-        val windowEnd = (cursor + windowSize).coerceAtMost(remainingPerVehicle.size)
-        var anyLeftInWindow = true
-        while (anyLeftInWindow) {
-          anyLeftInWindow = false
-          for (i in cursor until windowEnd) {
-            val (color, rem) = remainingPerVehicle[i]
-            if (rem > 0) {
-              anyLeftInWindow = true
-              val chunk = minOf(12, rem)
-              repeat(chunk) { passengerSequence.add(color) }
-              remainingPerVehicle[i] = color to (rem - chunk)
-            }
-          }
-        }
-        cursor = windowEnd
-      }
+      cursor = windowEnd
     }
 
     return LevelDefinition(

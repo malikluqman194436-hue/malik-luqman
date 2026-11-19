@@ -43,8 +43,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
@@ -177,34 +175,46 @@ private fun DrawScope.drawMissingAssetError(
   )
 }
 
-private const val SHEET_COLS = 4
+private const val SHEET_COLS = 6
 private const val SHEET_ROWS = 6
 
 private data class SheetDirectionPose(
   val row: Int,
   val flipX: Boolean,
-  val startCol: Int = 0,
-  val frameCount: Int = 4,
+  val startCol: Int = 1,
+  val frameCount: Int = 5,
 )
 
 private fun directionPoseForTangent(tx: Float, ty: Float, sheetCols: Int = SHEET_COLS): SheetDirectionPose {
   val angleDeg = (atan2(ty.toDouble(), tx.toDouble()) * 180.0 / PI).toFloat()
-  val count = sheetCols.coerceIn(1, 4)
+  if (sheetCols == 6) {
+    return when {
+      angleDeg in -22.5f..22.5f -> SheetDirectionPose(row = 1, flipX = false, startCol = 1, frameCount = 5)   // RIGHT
+      angleDeg in 22.5f..67.5f -> SheetDirectionPose(row = 4, flipX = false, startCol = 1, frameCount = 5)    // 3/4 FRONT-RIGHT
+      angleDeg in 67.5f..112.5f -> SheetDirectionPose(row = 0, flipX = false, startCol = 1, frameCount = 5)   // FRONT / DOWN
+      angleDeg in 112.5f..157.5f -> SheetDirectionPose(row = 4, flipX = true, startCol = 1, frameCount = 5)   // 3/4 FRONT-LEFT
+      angleDeg >= 157.5f || angleDeg <= -157.5f -> SheetDirectionPose(row = 2, flipX = false, startCol = 1, frameCount = 5) // LEFT
+      angleDeg in -157.5f..-112.5f -> SheetDirectionPose(row = 3, flipX = false, startCol = 1, frameCount = 5) // 3/4 BACK-LEFT
+      angleDeg in -112.5f..-67.5f -> SheetDirectionPose(row = 3, flipX = false, startCol = 1, frameCount = 5)  // BACK / UP
+      else -> SheetDirectionPose(row = 3, flipX = true, startCol = 1, frameCount = 5)                         // 3/4 BACK-RIGHT
+    }
+  }
   return when {
-    angleDeg in -22.5f..22.5f -> SheetDirectionPose(row = 1, flipX = false, startCol = 0, frameCount = count)       // RIGHT
-    angleDeg in 22.5f..67.5f -> SheetDirectionPose(row = 4, flipX = false, startCol = 0, frameCount = count)        // 3/4 FRONT-RIGHT
-    angleDeg in 67.5f..112.5f -> SheetDirectionPose(row = 0, flipX = false, startCol = 0, frameCount = count)       // FRONT / DOWN
-    angleDeg in 112.5f..157.5f -> SheetDirectionPose(row = 4, flipX = true, startCol = 0, frameCount = count)       // 3/4 FRONT-LEFT
-    angleDeg >= 157.5f || angleDeg <= -157.5f -> SheetDirectionPose(row = 2, flipX = false, startCol = 0, frameCount = count) // LEFT
-    angleDeg in -157.5f..-112.5f -> SheetDirectionPose(row = 5, flipX = false, startCol = 0, frameCount = count)    // 3/4 BACK-LEFT
-    angleDeg in -112.5f..-67.5f -> SheetDirectionPose(row = 3, flipX = false, startCol = 0, frameCount = count)     // BACK / UP
-    else -> SheetDirectionPose(row = 5, flipX = true, startCol = 0, frameCount = count)                             // 3/4 BACK-RIGHT
+    angleDeg in -22.5f..22.5f -> SheetDirectionPose(row = 1, flipX = false, startCol = 0, frameCount = 5)   // RIGHT
+    angleDeg in 22.5f..67.5f -> SheetDirectionPose(row = 2, flipX = false, startCol = 0, frameCount = 5)    // 3/4 FRONT-RIGHT
+    angleDeg in 67.5f..112.5f -> SheetDirectionPose(row = 0, flipX = false, startCol = 2, frameCount = 8)   // FRONT / DOWN
+    angleDeg in 112.5f..157.5f -> SheetDirectionPose(row = 2, flipX = true, startCol = 0, frameCount = 5)   // 3/4 FRONT-LEFT
+    angleDeg >= 157.5f || angleDeg <= -157.5f -> SheetDirectionPose(row = 1, flipX = true, startCol = 0, frameCount = 5) // LEFT
+    angleDeg in -157.5f..-112.5f -> SheetDirectionPose(row = 2, flipX = true, startCol = 5, frameCount = 3) // 3/4 BACK-LEFT
+    angleDeg in -112.5f..-67.5f -> SheetDirectionPose(row = 4, flipX = false, startCol = 5, frameCount = 3) // BACK / UP
+    else -> SheetDirectionPose(row = 2, flipX = false, startCol = 5, frameCount = 3)                        // 3/4 BACK-RIGHT
   }
 }
 
 /**
- * Draws an animated frame from the 4x6 matte-3D clay passenger sheet (`240x300` tight-cropped cells):
- * - Row 0 FRONT, Row 1 RIGHT, Row 2 LEFT, Row 3 BACK, Row 4 3/4 FRONT-RIGHT, Row 5 3/4 BACK-LEFT.
+ * Draws an animated frame from the 6x6 high-res mascot sheet (`220x300` cells):
+ * - Row 0 FRONT, Row 1 RIGHT, Row 2 LEFT, Row 3 BACK, Row 4 3/4 FRONT, Row 5 CHEER/JUMP.
+ * - Col 0 holds the crisp standing idle pose; Cols 1..5 hold the animated walk cycle.
  */
 fun DrawScope.drawPassengerAsset(
   sprite: ImageBitmap?,
@@ -220,16 +230,13 @@ fun DrawScope.drawPassengerAsset(
   @Suppress("UNUSED_PARAMETER") cropTopFraction: Float = 1.0f,
   walkPhase: Float = 0f,
   sheetRow: Int = 0,
-  startCol: Int = 0,
-  frameCount: Int = 4,
+  startCol: Int = 1,
+  frameCount: Int = 5,
   sheetCols: Int = SHEET_COLS,
   sheetRows: Int = SHEET_ROWS,
   isWalking: Boolean = true,
 ) {
   if (sprite == null) {
-    if (textMeasurer != null) {
-      drawMissingAssetError(textMeasurer, "Missing\nclay_${color.assetKey}", center, fontSizeSp = 7f)
-    }
     return
   }
 
@@ -244,34 +251,34 @@ fun DrawScope.drawPassengerAsset(
     else 0
   val frameCol = (startCol + localFrame).coerceIn(0, cols - 1)
 
-  // laneColumnWidthPx = passengerWidthDp = 1.12 * colStepDp -> * 1.86f = 2.083 * colStepDp (plump wall-to-wall fit)
-  val drawW = laneColumnWidthPx * 1.86f * uniformScale
+  // Sized so 4 plump mascots fill the road width shoulder-to-shoulder with heads meeting across rows
+  val drawW = laneColumnWidthPx * 2.28f * uniformScale
   val drawH = drawW * (cellH.toFloat() / cellW.toFloat())
-  val stepWave = if (isWalking) abs(sin((walkPhase * PI / 2.0))).toFloat() else 0f
-  val walkBob = if (isWalking) -stepWave * drawH * 0.025f else 0f
-  val animBounceY = if (isWalking) bounceScaleY * (0.988f + 0.024f * stepWave) else bounceScaleY
+  val stepWave = if (isWalking) abs(sin((walkPhase * PI / 2.5))).toFloat() else 0f
+  val walkBob = if (isWalking) -stepWave * drawH * 0.035f else 0f
+  val animBounceY = if (isWalking) bounceScaleY * (0.985f + 0.03f * stepWave) else bounceScaleY
 
-  // Soft ground shadow directly beneath feet
+  // Soft ground shadow directly beneath feet (feet baseline sits at ~0.95*cellH)
   drawOval(
-    color = Color.Black.copy(alpha = 0.20f * alpha),
-    topLeft = Offset(center.x - drawW * 0.22f, center.y + drawH * 0.21f),
-    size = Size(drawW * 0.44f, drawH * 0.08f),
+    color = Color.Black.copy(alpha = 0.24f * alpha),
+    topLeft = Offset(center.x - drawW * 0.24f, center.y + drawH * 0.23f),
+    size = Size(drawW * 0.48f, drawH * 0.09f),
   )
 
   withTransform({
     translate(center.x, center.y + walkBob)
-    if (leanDeg != 0f) rotate(degrees = leanDeg, pivot = Offset(0f, drawH * 0.24f))
+    if (leanDeg != 0f) rotate(degrees = leanDeg, pivot = Offset(0f, drawH * 0.28f))
     scale(
       scaleX = if (flipHorizontal) -1f else 1f,
       scaleY = animBounceY,
-      pivot = Offset(0f, drawH * 0.25f),
+      pivot = Offset(0f, drawH * 0.29f),
     )
   }) {
     drawImage(
       image = sprite,
       srcOffset = IntOffset(frameCol * cellW, safeRow * cellH),
       srcSize = IntSize(cellW, cellH),
-      dstOffset = IntOffset((-drawW * 0.5f).roundToInt(), (-drawH * 0.72f).roundToInt()),
+      dstOffset = IntOffset((-drawW * 0.5f).roundToInt(), (-drawH * 0.66f).roundToInt()),
       dstSize = IntSize(drawW.roundToInt().coerceAtLeast(1), drawH.roundToInt().coerceAtLeast(1)),
       alpha = alpha,
     )
@@ -307,8 +314,6 @@ fun ConveyorTrackView(
     }
 
     Canvas(modifier = Modifier.fillMaxSize()) {
-      val colWidthPx = laneGeom.passengerWidthDp.dp.toPx()
-
       if (showLaneDebug) {
         val debugPaths = laneGeom.debugPaths()
         val columnDash = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx()), 0f)
@@ -328,58 +333,6 @@ fun ConveyorTrackView(
           }
           drawPath(path = path, color = strokeColor, style = Stroke(width = strokeW, pathEffect = effect))
         }
-      }
-
-      data class PositionedPassenger(
-        val p: ConveyorPassenger,
-        val sample: LaneSample,
-        val pos: Offset,
-      )
-
-      val positioned =
-        passengers
-          .asSequence()
-          .mapNotNull { p ->
-            val (sample, coordsDp) = laneGeom.passengerCoords(p.segment, p.distDp, p.colInRow)
-            if (coordsDp.second < -28f) return@mapNotNull null
-            PositionedPassenger(
-              p = p,
-              sample = sample,
-              pos = Offset(coordsDp.first.dp.toPx(), coordsDp.second.dp.toPx()),
-            )
-          }
-          // Draw far-to-near so front rows overlap behind rows cleanly
-          .sortedWith(compareBy<PositionedPassenger> { it.pos.y }.thenBy { it.p.distDp })
-          .toList()
-
-      for (item in positioned) {
-        val (sheetCols, sheetRows) = assets.getPassengerGrid(item.p.color)
-        val pose = directionPoseForTangent(item.sample.tx, item.sample.ty, sheetCols)
-        val localScale = laneGeom.passengerScale(item.p.segment, item.p.distDp)
-        val walkFrameFloat = conveyorOffsetPx * 0.28f + item.p.rowGroupId * 0.9f + (item.p.colInRow % 2) * 1.5f
-        val spokeAngleDeg =
-          if (item.p.segment == ConveyorSegment.RING) item.sample.tx * 1.8f
-          else item.sample.tx * 1.0f
-
-        drawPassengerAsset(
-          sprite = assets.getPassengerSprite(item.p.color),
-          center = item.pos,
-          laneColumnWidthPx = colWidthPx,
-          color = item.p.color,
-          textMeasurer = textMeasurer,
-          bounceScaleY = 1.0f,
-          uniformScale = localScale,
-          leanDeg = spokeAngleDeg,
-          flipHorizontal = pose.flipX,
-          cropTopFraction = 1.0f,
-          walkPhase = if (item.p.isWalking) walkFrameFloat else 0f,
-          sheetRow = pose.row,
-          startCol = if (item.p.isWalking) pose.startCol else 0,
-          frameCount = if (item.p.isWalking) pose.frameCount else 1,
-          sheetCols = sheetCols,
-          sheetRows = sheetRows,
-          isWalking = item.p.isWalking,
-        )
       }
     }
   }
@@ -847,32 +800,6 @@ private fun DrawScope.drawOpenTopBusBody(
             cornerRadius = seatCorner,
           )
         }
-      }
-
-      // Seated matte-3D clay passenger heads row by row from front (top) to back (bottom), left to right
-      for (seatIdx in 0 until visibleHeads.coerceAtMost(40)) {
-        val r = seatIdx / SEAT_COLS
-        val c = seatIdx % SEAT_COLS
-        val sx = (c - 1) * 5.2f * ux
-        val sy = fullTop + (3.4f + r * 2.85f) * uy
-        val center = Offset(sx, sy)
-
-        drawCircle(
-          color = vehicle.color.roofLight,
-          radius = headR,
-          center = center,
-        )
-        drawCircle(
-          color = vehicle.color.roofDark.copy(alpha = 0.55f),
-          radius = headR,
-          center = center,
-          style = Stroke(width = outlineStrokeW),
-        )
-        drawCircle(
-          color = Color.White.copy(alpha = 0.72f),
-          radius = shineR,
-          center = Offset(sx - headR * 0.28f, sy - headR * 0.30f),
-        )
       }
     }
   }
@@ -1364,59 +1291,7 @@ fun PlayfieldEffectsOverlay(
       }
     }
 
-    // 2. Jumping passengers arc (0.28s) aiming cleanly into the next ordered seat (14 rows x 3 seats)
-    val jumpColW = (w * 0.023f).coerceIn(8.5.dp.toPx(), 12.dp.toPx())
-    val tiltRad = SLOT_TILT_DEG * (PI / 180.0)
-    val cosTilt = cos(tiltRad).toFloat()
-    val sinTilt = sin(tiltRad).toFloat()
-    val jumpOrderCounter = HashMap<Int, Int>()
-    for (j in jumpingPassengers) {
-      val sx = j.startNormX * w
-      val sy = j.startNormY * h
-      val slotCx = slotCenterXNorm(j.targetSlotIndex) * w
-      val slotCy = SLOT_CENTER_Y_NORM * h
-
-      val targetBus = vehicles.firstOrNull { it.id == j.targetVehicleId }
-      val inFlightOrder = jumpOrderCounter[j.targetVehicleId] ?: 0
-      jumpOrderCounter[j.targetVehicleId] = inFlightOrder + 1
-      val cap = targetBus?.capacity ?: 40
-      val seatIdx = ((targetBus?.boardedCount ?: 0) + inFlightOrder).coerceIn(0, (cap - 1).coerceAtLeast(0))
-      val seatR = (seatIdx / SEAT_COLS).coerceIn(0, SEAT_ROWS - 1)
-      val seatC = seatIdx % SEAT_COLS
-      val fullOpenW = (bayW * 0.90f) * 0.80f
-      val fullOpenH = (bayH * 0.94f) * 0.82f
-      val ux = fullOpenW / 18.4f
-      val uy = fullOpenH / 44.28f
-      val localX = (seatC - 1) * 5.2f * ux
-      val localY = (bayH * 0.94f * 0.03f - fullOpenH * 0.5f) + (3.4f + seatR * 2.85f) * uy
-      val tx = slotCx + localX * cosTilt - localY * sinTilt
-      val ty = slotCy + localX * sinTilt + localY * cosTilt
-
-      val p = j.progress.coerceIn(0f, 1f)
-      val arcLift = sin(p * PI).toFloat() * 24.dp.toPx()
-      val cx = sx + (tx - sx) * p
-      val cy = sy + (ty - sy) * p - arcLift
-      val shrink = 1f - 0.45f * p
-      val (jumpCols, jumpRows) = assets.getPassengerGrid(j.color)
-      val jumpFrameCount = jumpCols.coerceAtLeast(1)
-      drawPassengerAsset(
-        sprite = assets.getPassengerSprite(j.color),
-        center = Offset(cx, cy),
-        laneColumnWidthPx = jumpColW,
-        color = j.color,
-        textMeasurer = textMeasurer,
-        uniformScale = shrink,
-        alpha = (1f - (p - 0.85f).coerceAtLeast(0f) / 0.15f).coerceIn(0f, 1f),
-        cropTopFraction = 1f,
-        walkPhase = p * (jumpFrameCount - 0.01f),
-        sheetRow = 0,
-        startCol = 0,
-        frameCount = jumpFrameCount,
-        sheetCols = jumpCols,
-        sheetRows = jumpRows,
-        isWalking = true,
-      )
-    }
+    // 2. Jumping passengers intentionally disabled while passengers are cleared
 
     // 3. Confetti & dust particles
     for (pt in particles) {
